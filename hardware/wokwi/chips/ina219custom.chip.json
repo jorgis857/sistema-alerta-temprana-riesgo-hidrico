@@ -1,0 +1,12 @@
+{
+  "name": "INA219 Custom",
+  "author": "Challenge IoT",
+  "pins": [
+    "VCC",
+    "GND",
+    "SCL",
+    "SDA",
+    "VIN+",
+    "VIN-"
+  ]
+}

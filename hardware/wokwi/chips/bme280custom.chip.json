@@ -1,0 +1,36 @@
+{
+  "name": "BME280 Custom",
+  "author": "Challenge IoT",
+  "pins": [
+    "VCC",
+    "GND",
+    "SCL",
+    "SDA"
+  ],
+  "controls": [
+    {
+      "id": "temperature",
+      "label": "Temperature (C)",
+      "type": "range",
+      "min": -10,
+      "max": 50,
+      "step": 0.1
+    },
+    {
+      "id": "humidity",
+      "label": "Humidity (%)",
+      "type": "range",
+      "min": 0,
+      "max": 100,
+      "step": 1
+    },
+    {
+      "id": "pressure",
+      "label": "Pressure (hPa)",
+      "type": "range",
+      "min": 800,
+      "max": 1100,
+      "step": 1
+    }
+  ]
+}
