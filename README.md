@@ -59,7 +59,6 @@ sistema-alerta-temprana-riesgo-hidrico/
 │   ├── 08-Uso-de-IA.md
 │   ├── 09-Equipo-Roles.md
 │   ├── 10-English-Executive-Summary.md
-│   └── 11-Checklist-Rubrica.md
 ├── firmware/
 │   ├── sketch.ino                # Código fuente documentado (ESP32)
 │   └── libraries.txt             # Librerías Arduino/Wokwi requeridas
@@ -71,7 +70,7 @@ sistema-alerta-temprana-riesgo-hidrico/
 │   └── schematics/
 │       └── diagrama_circuito_wokwi.png
 ├── video/
-│   └── GUION_VIDEO.md            # Guion para el video de demostración (máx. 5 min)
+│   └── GUION_VIDEO.md            
 └── .github/
     └── PULL_REQUEST_TEMPLATE.md  (opcional)
 ```
@@ -107,9 +106,6 @@ sistema-alerta-temprana-riesgo-hidrico/
 
 Detalle de contribuciones en [`wiki/09-Equipo-Roles.md`](wiki/09-Equipo-Roles.md).
 
-## 📜 Licencia
-
-Este proyecto se distribuye bajo licencia [MIT](LICENSE) con fines académicos.
 
 ## 🙏 Uso de Inteligencia Artificial
 
