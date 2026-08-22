@@ -39,19 +39,6 @@ Referencias del contexto del reto (tomadas del enunciado oficial del Challenge #
 
 [4] Gobernación de Cundinamarca, "Plan de Contingencia para el Fenómeno de El Niño," Unidad Administrativa Especial para la Gestión del Riesgo de Desastres (UAEGRD), Bogotá, Colombia, Inf. Técnico, 2026. [En línea]. Disponible: https://www.cundinamarca.gov.co/wcm/connect/107cf680-7a33-47d6-8f65-0d534e1de1e2/PLAN+DE+CONTIGENCIA+FEN%C3%93MENO+EL+NI%C3%91O.pdf
 
-Referencias técnicas adicionales utilizadas en el diseño:
-
-[5] Espressif Systems, "ESP32 Series Datasheet," 2024. [En línea]. Disponible: https://www.espressif.com/sites/default/files/documentation/esp32_datasheet_en.pdf
-
-[6] Bosch Sensortec, "BME280 — Combined humidity and pressure sensor, Datasheet," 2021. [En línea]. Disponible: https://www.bosch-sensortec.com/products/environmental-sensors/humidity-sensors-bme280/
-
-[7] Texas Instruments, "INA219 — Zero-Drift, Bidirectional Current/Power Monitor with I2C Interface, Datasheet," rev. Sep. 2015. [En línea]. Disponible: https://www.ti.com/lit/ds/symlink/ina219.pdf
-
-[8] NXP Semiconductors, "UM10204 — I2C-bus specification and user manual," rev. 7.0, 2021. [En línea]. Disponible: https://www.nxp.com/docs/en/user-guide/UM10204.pdf
-
-[9] Wokwi, "Wokwi Custom Chips API Documentation," 2024. [En línea]. Disponible: https://docs.wokwi.com/chips-api/getting-started
-
-[10] F. Allen y L. S. Pereira, "Crop evapotranspiration — Guidelines for computing crop water requirements," FAO Irrigation and Drainage Paper 56, Food and Agriculture Organization of the United Nations, Roma, 1998. [En línea]. Disponible: https://www.fao.org/3/x0490e/x0490e00.htm
 
 ---
 [⬅ Anterior: Autoevaluación del protocolo de pruebas](06-Autoevaluacion-Pruebas.md) · [⬆ Índice](00-Home.md) · [Siguiente: Uso de Inteligencia Artificial ➡](08-Uso-de-IA.md)
