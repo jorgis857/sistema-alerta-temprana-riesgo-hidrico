@@ -28,6 +28,5 @@ Bienvenidos a la Wiki técnica del proyecto **SATRH**, un prototipo IoT de bajo 
 - Chips personalizados (BME280, INA219, panel solar): [`/hardware/wokwi/chips`](../hardware/wokwi/chips)
 - Esquemático / captura del circuito: [`/hardware/schematics/diagrama_circuito_wokwi.png`](../hardware/schematics/diagrama_circuito_wokwi.png)
 - Proyecto simulable en Wokwi: <https://wokwi.com/projects/472250559337371649>
-- Guion del video de demostración: [`/video/GUION_VIDEO.md`](../video/GUION_VIDEO.md)
 
-> **Nota:** el enlace público de esta Wiki debe compartirse con `@afbeltranp` según lo exige el enunciado del Challenge #1, junto con el enlace del repositorio y el video en la actividad habilitada en MS Teams.
+
