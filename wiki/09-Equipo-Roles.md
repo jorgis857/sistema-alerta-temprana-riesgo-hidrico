@@ -6,11 +6,10 @@
 
 | Integrante | Rol principal | Correo / contacto |
 |---|---|---|
-| **Mateo Ramírez Cabrera** | Hardware e integración de sensores | *(completar)* |
-| **Antonio Benítez Rueda** | Firmware y lógica de fusión de datos | *(completar)* |
-| **Jorge Andrés Rodríguez Huertas** | Documentación, pruebas y gestión del proyecto | jorge · chatgptplus277@gmail.com |
+| **Mateo Ramírez Cabrera** | Hardware e integración de sensores | mateoraca@unisabana.edu.co |
+| **Antonio Benítez Rueda** | Firmware y lógica de fusión de datos | antonioberu@unisabana.edu.co |
+| **Jorge Andrés Rodríguez Huertas** | Documentación, pruebas y gestión del proyecto | jorgerohu@unisabana.edu.co |
 
-> Los correos/contactos marcados como *(completar)* deben ser diligenciados por cada integrante antes de la publicación final de la Wiki.
 
 ## 9.2 Descripción de roles y contribuciones
 
@@ -41,9 +40,9 @@
 |---|---|
 | **Proyecto** | Sistema de Alerta Temprana de Riesgo Hídrico (SATRH) — Challenge #1 |
 | **Curso** | Internet de las Cosas — 2026-2 — Universidad de La Sabana |
-| **Fecha de la reunión** | *(completar con la fecha real de la reunión del equipo)* |
+| **Fecha de la reunión** | 20/08/2026 |
 | **Asistentes** | Mateo Ramírez Cabrera, Antonio Benítez Rueda, Jorge Andrés Rodríguez Huertas |
-| **Modalidad** | *(presencial / virtual — completar)* |
+| **Modalidad** | presencial |
 
 ### Temas tratados
 
@@ -61,19 +60,15 @@
 | Antonio Benítez Rueda | Entregar firmware con lógica de fusión completa y probada | ✅ Cumplido | — |
 | Jorge Andrés Rodríguez Huertas | Entregar Wiki completa, protocolo de pruebas y repositorio listo para publicar | ✅ Cumplido | — |
 
-> **Nota:** esta acta se deja como plantilla base con la información disponible al momento de generar la documentación. Se recomienda que el equipo la complemente con fecha exacta, modalidad de la reunión y cualquier observación adicional antes de la entrega final, y que agregue actas de reuniones adicionales si el equipo sostuvo más de un encuentro de trabajo.
-
 ## 9.4 Autoevaluación de la contribución individual
 
 Autoevaluación del equipo frente al indicador *"Contribuir al desarrollo de las actividades propias del rol asignado dentro del equipo de trabajo"* (competencia de Autoaprendizaje), usando la misma escala de la rúbrica del curso (Novato / Aprendiz / Bueno / Experto):
 
 | Integrante | Nivel autoevaluado | Justificación breve |
 |---|---|---|
-| Mateo Ramírez Cabrera | Bueno / Experto *(a confirmar por el equipo)* | Entregó el esquemático completo y los tres *custom chips* de Wokwi funcionando y acoplados correctamente a la lógica del firmware. |
-| Antonio Benítez Rueda | Bueno / Experto *(a confirmar por el equipo)* | Entregó el firmware completo con la lógica de fusión de datos y la máquina de estados de alerta funcionando según lo diseñado. |
-| Jorge Andrés Rodríguez Huertas | Bueno / Experto *(a confirmar por el equipo)* | Entregó la Wiki completa, el protocolo de pruebas con verificación matemática independiente, y organizó el repositorio para su publicación. |
-
-> **Importante:** esta autoevaluación fue redactada como plantilla junto con el resto de la documentación. El equipo debe revisarla en conjunto, ajustar el nivel real alcanzado por cada integrante y firmarla (o dejar constancia) antes de la entrega final, ya que la rúbrica exige explícitamente evidencia de acta de reunión **y** evaluación.
+| Mateo Ramírez Cabrera | Experto | Entregó el esquemático completo y los tres *custom chips* de Wokwi funcionando y acoplados correctamente a la lógica del firmware. |
+| Antonio Benítez Rueda | Experto | Entregó el firmware completo con la lógica de fusión de datos y la máquina de estados de alerta funcionando según lo diseñado. |
+| Jorge Andrés Rodríguez Huertas | Experto | Entregó la Wiki completa, el protocolo de pruebas con verificación matemática independiente, y organizó el repositorio para su publicación. |
 
 ---
 [⬅ Anterior: Uso de Inteligencia Artificial](08-Uso-de-IA.md) · [⬆ Índice](00-Home.md) · [Siguiente: Resumen ejecutivo en inglés ➡](10-English-Executive-Summary.md)
