@@ -19,7 +19,6 @@ Bienvenidos a la Wiki técnica del proyecto **SATRH**, un prototipo IoT de bajo 
 8. [Uso de Inteligencia Artificial](08-Uso-de-IA.md)
 9. [Equipo de trabajo: roles y contribuciones](09-Equipo-Roles.md)
 10. [Executive Summary (English)](10-English-Executive-Summary.md)
-11. [Checklist de cumplimiento frente a la rúbrica](11-Checklist-Rubrica.md)
 
 ## Anexos
 
