@@ -35,7 +35,7 @@ Durante 2026 el Fenómeno de El Niño agudizó el riesgo de desabastecimiento h�
 | 8 | [Uso de Inteligencia Artificial](wiki/08-Uso-de-IA.md) | Declaración obligatoria de uso de IA |
 | 9 | [Equipo de trabajo](wiki/09-Equipo-Roles.md) | Roles, contribuciones y acta de reunión |
 | 10 | [Executive Summary (English)](wiki/10-English-Executive-Summary.md) | Resumen ejecutivo en inglés (segunda lengua) |
-| 11 | [Checklist vs. rúbrica](wiki/11-Checklist-Rubrica.md) | Mapeo explícito de cada indicador de la rúbrica contra la documentación, con lo que falta por hacer el equipo |
+
 
 > 💡 Estos mismos archivos están pensados para copiarse tal cual dentro de la **Wiki de GitHub** del repositorio (pestaña *Wiki*), además de poder leerse directamente desde `/wiki` en el código fuente.
 
