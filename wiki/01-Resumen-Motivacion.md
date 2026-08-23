@@ -10,9 +10,9 @@ El sistema combina tres tipos de evidencia física para tomar una decisión de r
 
 1. **Cuánta agua queda** — nivel del reservorio, medido con un sensor ultrasónico HC-SR04.
 2. **Qué tan favorables son las condiciones ambientales para que esa agua se pierda por evaporación** — combinando temperatura, humedad relativa (sensor BME280) y radiación solar aproximada (mini panel solar + sensor de corriente INA219).
-3. **Qué tan rápido está bajando el nivel** — comparando mediciones sucesivas de nivel en el tiempo.
+3. **Qué tan rápido está bajando el nivel** — estimando el cambio por medio de una regresión lineal de mínimos cuadrados.
 
-Estas tres señales se funden mediante una función de ponderación (50 % déficit de nivel + 30 % índice evaporativo + 20 % tasa de descenso) más un conjunto de **reglas de seguridad** que garantizan que ninguna variable extremadamente crítica quede "escondida" por el promedio de las demás. El resultado se traduce en tres estados — 🟢 `NORMAL`, 🟡 `PRECAUCIÓN`, 🔴 `CRÍTICO` — que se comunican **in situ** mediante una pantalla OLED, LEDs de estado y un buzzer, cumpliendo así con la restricción técnica de notificación local sin infraestructura de comunicaciones.
+Estas tres señales se funden mediante una función de ponderación (50 % déficit de nivel + 30 % índice evaporativo + 20 % tasa de descenso) más un conjunto de **reglas de seguridad** que garantizan que ninguna variable extremadamente crítica quede "escondida" por el promedio de las demás. El resultado se traduce en tres estados — 🟢 `NORMAL`, 🟡 `PRECAUCIÓN`, 🔴 `CRÍTICO` — que se comunican **in situ** mediante una pantalla LCD, LEDs de estado y un buzzer, cumpliendo así con la restricción técnica de notificación local sin infraestructura de comunicaciones.
 
 ## 1.2 Motivación
 
@@ -29,7 +29,17 @@ De ahí nace la motivación del proyecto: **llevar la vigilancia hidrometeoroló
 
 ## 1.4 Alcance del prototipo
 
-El prototipo se validó en simulación mediante **Wokwi**, utilizando *custom chips* en lenguaje C que emulan de forma funcional el comportamiento físico de un sensor BME280 (temperatura, humedad, presión), un sensor de corriente INA219 conectado a un mini panel solar (radiación solar aproximada), y un sensor ultrasónico HC-SR04 (nivel del reservorio). El firmware corre completamente en el ESP32 y no requiere ningún servicio externo. La migración a hardware físico real está descrita como trabajo futuro en la [Sección 7](07-Conclusiones-Trabajo-Futuro.md).
+El desarrollo se hizo en dos etapas. En la primera, la arquitectura y la lógica de
+fusión se validaron en **simulación (Wokwi)** mediante *custom chips* escritos
+en C que emulan funcionalmente un BME280, un INA219 acoplado a un mini panel solar 
+y un HC-SR04. En la segunda, se realizó el **montaje físico** (ESP32 DevKit, 
+BME280, sensor ultrasónico OKY3261, LCD 16×2 I²C, LEDs y buzzer pasivo), donde se 
+ejecutaron la caracterización de ruido del sensor y se calibraron experimentalmente
+los umbrales de tendencia.
+
+El firmware corre en el ESP32 y no requiere ningún servicio externo. Las 
+limitaciones remanentes —geometría del banco de pruebas y escala temporal— 
+se detallan en la [Sección 6](06-Autoevaluacion-Pruebas.md).
 
 ## 1.5 Estructura de la documentación
 
