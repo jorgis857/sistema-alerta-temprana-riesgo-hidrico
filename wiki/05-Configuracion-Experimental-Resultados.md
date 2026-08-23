@@ -134,6 +134,7 @@ Durante la etapa de diseño se definieron diferentes escenarios en Wokwi para co
 | C8 — Riesgo combinado ≥ 70 % | 24.0 cm | 29.0 °C | 25 % | 900 W/m² | 22.2 % | 3.00 kPa | 95.0 % | 3.0 pp/h | 79.4 % | 🔴 **CRÍTICO** |
 
 > Estos valores corresponden a la etapa de simulación y fueron utilizados para validar la lógica del algoritmo. La implementación física utiliza la calibración correspondiente a las dimensiones reales de la maqueta.
+
 > Las tasas de esta tabla se expresan en pp/h y corresponden a la formulación
 > inicial de la tendencia (diferencia entre mediciones consecutivas), previa a
 > la adopción de la regresión sobre ventana deslizante descrita en la Sección
