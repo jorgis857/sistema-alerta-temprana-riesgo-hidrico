@@ -147,7 +147,10 @@ Estos valores corresponden a parámetros iniciales de diseño y pueden recalibra
 
 | Variable | PRECAUCIÓN | CRÍTICO | Origen del valor |
 |---|---|---|---|
-| Nivel del reservorio | ≤ 40 % | ≤ 15 % | Criterio operativo de diseño | Índice evaporativo | ≥ 60 | ≥ 85 | Criterio operativo de diseño | Tasa de descenso | ≥ 33 pp/min | ≥ 68 pp/min | **Calibración experimental** (Sección 5) | Riesgo ponderado | ≥ 35 | ≥ 70 | Criterio operativo de diseño |
+| Nivel del reservorio | ≤ 40 % | ≤ 15 % | Criterio operativo de diseño |
+| Índice evaporativo | ≥ 60 | ≥ 85 | Criterio operativo de diseño |
+| Tasa de descenso | ≥ 33 pp/min | ≥ 68 pp/min | **Calibración experimental** (Sección 5) |
+| Riesgo ponderado | ≥ 35 | ≥ 70 | Criterio operativo de diseño |
 
 Referencias de normalización: irradiancia 1200 W/m² (pico realista a 2550 m de altitud) y VPD 2.0 kPa. Esta última se fijó a partir del clima local: a 24 °C la presión de vapor de saturación es 2.98 kPa, de modo que 2.0 kPa representa una tarde seca del percentil alto de la región. Una referencia mayor dejaría el índice permanentemente por debajo de sus umbrales.
 
