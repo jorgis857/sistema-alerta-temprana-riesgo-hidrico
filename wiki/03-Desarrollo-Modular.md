@@ -37,7 +37,7 @@ Este porcentaje **no** representa la fracción de agua que se evaporará; repres
 
 ### 3.2.4 Tasa e índice de descenso
 
-$$Tasa\ (pp/h) = Nivel_{anterior} - Nivel_{actual} \quad (\text{si es negativa, se trunca a 0})$$
+$$Regresión por mínimos cuadrados en 20s, en pp/min
 
 $$Indice_{descenso}\ (\%) = \min\!\left(\frac{Tasa}{5.0},\,1\right)\times 100$$
 
@@ -51,8 +51,8 @@ $$Riesgo\ (\%) = 0.50 \cdot (100 - Nivel) + 0.30 \cdot Indice_{evap} + 0.20 \cdo
 
 | Estado | Condición (basta con que se cumpla **una**) |
 |---|---|
-| 🔴 **CRÍTICO** | Riesgo ≥ 70 % **o** Nivel ≤ 15 % **o** Índice evaporativo ≥ 85 % **o** Tasa de descenso ≥ 5 pp/h |
-| 🟡 **PRECAUCIÓN** | Riesgo ≥ 35 % **o** Nivel ≤ 40 % **o** Índice evaporativo ≥ 60 % **o** Tasa de descenso ≥ 2 pp/h |
+| 🔴 **CRÍTICO** | Riesgo ≥ 70 % **o** Nivel ≤ 15 % **o** Índice evaporativo ≥ 85 % **o** Tasa de descenso ≥ 68 pp/h |
+| 🟡 **PRECAUCIÓN** | Riesgo ≥ 35 % **o** Nivel ≤ 40 % **o** Índice evaporativo ≥ 60 % **o** Tasa de descenso ≥ 33 pp/h |
 | 🟢 **NORMAL** | Ninguna de las anteriores |
 
 > Estos umbrales son parámetros iniciales de diseño (definidos en las constantes `TASA_PRECAUCION`, `TASA_CRITICA`, `RADIACION_REFERENCIA`, `VPD_REFERENCIA` del firmware) y deben ajustarse experimentalmente según la geometría real de cada reservorio y las condiciones climáticas locales de cada punto de instalación en Sabana Centro.
