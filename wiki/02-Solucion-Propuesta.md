@@ -38,7 +38,7 @@ flowchart LR
     end
 
     subgraph ACT["Capa de actuación / HMI local (in situ)"]
-        OLED[OLED SSD1306\n128x64 I2C]
+        LCD[LCD 16x2 I2C]
         LEDV[LED Verde]
         LEDA[LED Amarillo]
         LEDR[LED Rojo]
