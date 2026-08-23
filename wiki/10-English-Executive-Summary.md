@@ -84,7 +84,7 @@ VPD and estimated irradiance are then combined into an **evaporative-condition i
 
 This index does not represent the actual percentage of water evaporated. Instead, it indicates how favorable the environmental conditions are for evaporation.
 
-Atmospheric pressure is also measured by the BME280 and retained as contextual environmental information, but it is not used as a primary trigger in the water-risk classification.
+Atmospheric pressure is also measured by the BME280. It is not used as a risk indicator — in a fixed tropical station its variation is negligible and it does not respond to water scarcity. Instead, it acts as a **parameter of the evaporation model**: through the psychrometric constant, it determines the Penman partition between the radiative and aerodynamic terms. At the 2550 m altitude of Sabana Centro, this shifts the weighting towards evaporation by approximately 10 % relative to sea level. A model calibrated with sea-level parameters would underestimate local evaporative demand.
 
 ---
 
@@ -191,6 +191,13 @@ RISK CLASSIFICATION
    ↓
 LOCAL WARNING
 ```
+
+### Experimental characterization
+
+Before fixing the trend-detection parameters, the ultrasonic sensor's noise was characterized experimentally: with the platform stationary, 20 measurements were taken and their standard deviation computed. From this, the standard error of a
+least-squares slope over the estimation window was derived, and the dead band was set at three times that value — keeping the false-positive rate below 1 %. This characterization runs automatically at every startup, so the dead band adapts to the specific installation rather than relying on a fixed a-priori value.
+
+The trend thresholds were then calibrated using two controlled descent manoeuvres, yielding maximum slopes of **46.9 pp/min** (slow) and **98.2 pp/min** (fast). The precaution threshold was set at 70 % of the slow manoeuvre and the critical threshold at the geometric mean of both, which leaves the same relative margin on either side.
 
 ---
 
