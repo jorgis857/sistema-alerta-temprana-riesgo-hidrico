@@ -122,7 +122,7 @@ Finalmente, WREWS clasifica la situación en:
 
 Durante la etapa de diseño se definieron diferentes escenarios en Wokwi para comprobar las rutas de clasificación del algoritmo.
 
-| Caso | Distancia | Temp. | Humedad | Irradiancia | Nivel | VPD | Índice evap. | Tasa descenso | Riesgo | Estado esperado |
+| Caso | Distancia | Temp. | Humedad | Irradiancia | Nivel | VPD | Índice evap. | Tasa descenso | Riesgo | Estado esperado | Estado obtenido |
 |---|---|---|---|---|---|---|---|---|---|---|
 | C1 — Escenario favorable | 4.0 cm | 18.0 °C | 70 % | 300 W/m² | 96.3 % | 0.62 kPa | 25.3 % | 0.0 pp/h | 9.4 % | 🟢 **NORMAL** |
 | C2 — Riesgo combinado | 15.0 cm | 22.0 °C | 55 % | 600 W/m² | 55.6 % | 1.19 kPa | 49.8 % | 1.0 pp/h | 41.2 % | 🟡 **PRECAUCIÓN** |
@@ -134,6 +134,14 @@ Durante la etapa de diseño se definieron diferentes escenarios en Wokwi para co
 | C8 — Riesgo combinado ≥ 70 % | 24.0 cm | 29.0 °C | 25 % | 900 W/m² | 22.2 % | 3.00 kPa | 95.0 % | 3.0 pp/h | 79.4 % | 🔴 **CRÍTICO** |
 
 > Estos valores corresponden a la etapa de simulación y fueron utilizados para validar la lógica del algoritmo. La implementación física utiliza la calibración correspondiente a las dimensiones reales de la maqueta.
+> Las tasas de esta tabla se expresan en pp/h y corresponden a la formulación
+> inicial de la tendencia (diferencia entre mediciones consecutivas), previa a
+> la adopción de la regresión sobre ventana deslizante descrita en la Sección
+> 3.2.4. Se conservan como evidencia del proceso de desarrollo.
+
+> El caso C6 (33 °C, 15 % HR) constituye un escenario sintético fuera de la
+> envolvente climática de la Sabana de Bogotá. Se incluyó para verificar la
+> saturación del índice evaporativo, no como condición esperable en la región.
 
 ---
 
@@ -169,7 +177,34 @@ Los resultados obtenidos fueron:
 | P6 | Estado CRÍTICO | Condición crítica → LED rojo y alarma sonora | ✅ Correcto |
 | P7 | LCD 16×2 I²C | Visualización local de información y estado | ✅ Correcto |
 | P8 | Procesamiento local | Clasificación y actuación sin conexión de red | ✅ Correcto |
-| P9 | Tasa de descenso | Comparación de mediciones sucesivas para detectar disminuciones aceleradas | ✅ Correcto |
+| P9 | Tasa de descenso | Estimación de la pendiente por regresión sobre ventana deslizante, con banda muerta derivada del ruido medido | ✅ Correcto |
+
+### 5.5.1 Caracterización del sensor y calibración de umbrales
+
+Antes de fijar los parámetros de detección de tendencia se caracterizó experimentalmente el ruido del sensor ultrasónico. Con la plataforma inmóvil se tomaron 20 mediciones y se calculó su desviación estándar.
+
+| Magnitud | Valor medido |
+|---|---|
+| σ de distancia | __ cm |
+| σ de nivel (sobre recorrido de 17 cm) | __ pp |
+| Ventana de estimación | 20 muestras · 20 s |
+| Error típico de la pendiente | __ pp/min |
+| Banda muerta aplicada | __ pp/min |
+
+El error típico de una pendiente ajustada por mínimos cuadrados sobre *n* puntos repartidos en un lapso *T* es `SE = σ·√12 / (T·√n)`. La banda muerta se fijó en tres veces ese valor, lo que sitúa la probabilidad de falso positivo por debajo del 1 %. El procedimiento se ejecuta **automáticamente en cada arranque**, de modo que la banda se adapta al montaje concreto en lugar de depender de un valor elegido a priori.
+
+Los umbrales de tendencia se calibraron mediante dos maniobras controladas de descenso continuo, registrando la pendiente máxima estimada en cada una:
+
+| Maniobra | Pendiente máxima | Umbral derivado |
+|---|---|---|
+| Descenso lento sostenido | **46.9 pp/min** | PRECAUCIÓN = 33 pp/min (70 % de la lenta) |
+| Descenso rápido | **98.2 pp/min** | CRÍTICO = 68 pp/min (media geométrica) |
+
+Se eligió la media geométrica sobre la aritmética porque ambas maniobras se comparan por proporción —la rápida es 2.1 veces la lenta— y la geométrica deja el mismo margen relativo a cada lado: un factor de 1.45 en ambos casos.
+
+El detector de discontinuidad impone además un techo: 8 pp entre mediciones consecutivas equivalen a 1.4 cm/s sobre este recorrido, por encima de lo cual el movimiento se clasifica como reposicionamiento y no como descenso.
+
+**Cero del piranómetro.** Se caracterizó promediando 20 lecturas del INA219 con el panel sin iluminación, obteniendo __ mA. Ese valor corresponde al offset del amplificador del INA219 más la corriente de fuga del panel, y se resta de todas las lecturas posteriores. La pendiente de la escala se deriva de la corriente de cortocircuito declarada por el fabricante (100 mA a 1000 W/m²), valor **pendiente de verificación experimental**: las etiquetas de paneles pequeños suelen declarar la corriente en el punto de máxima potencia, típicamente entre 5 y 10 % menor que la de cortocircuito.
 
 Las pruebas permitieron comprobar el **funcionamiento completo del prototipo** y la correspondencia entre la lógica previamente validada en Wokwi y el comportamiento del montaje físico.
 
