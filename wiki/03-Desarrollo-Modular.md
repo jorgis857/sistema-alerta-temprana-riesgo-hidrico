@@ -13,7 +13,7 @@
 | **Calibración simple y replicable** | El nivel se calibra con solo 2 parámetros (`DISTANCIA_LLENO`, `DISTANCIA_VACIO`) | Permite reutilizar el mismo firmware en distintos reservorios de la región Sabana Centro |
 | **Simulación antes de hardware físico** | Validación completa en Wokwi con *custom chips* en C antes de ensamblar hardware real | Reduce riesgo y costo de iteración; permite verificar la lógica de fusión con controles interactivos |
 | **Bajo consumo / operación remota** | Alimentación por batería recargable con panel solar; ciclo de refresco de pantalla de 500 ms (no continuo a máxima velocidad) | Extiende la autonomía en campo, donde no siempre hay red eléctrica |
-| **Legibilidad para usuarios no técnicos** | La OLED alterna dos pantallas (mediciones crudas / análisis y estado) y los LEDs usan el código de color universal semáforo (verde/amarillo/rojo) | La alerta debe ser comprensible por miembros de la comunidad sin formación técnica |
+| **Legibilidad para usuarios no técnicos** | El LCD alterna dos pantallas (mediciones crudas / análisis y estado) y los LEDs usan el código de color universal semáforo (verde/amarillo/rojo) | La alerta debe ser comprensible por miembros de la comunidad sin formación técnica |
 
 ## 3.2 Modelo matemático de fusión de datos
 
@@ -21,7 +21,7 @@
 
 $$Nivel\ (\%) = \frac{D_{vacío} - D_{medida}}{D_{vacío} - D_{lleno}} \times 100 \quad \text{(saturado entre 0 y 100)}$$
 
-En la maqueta simulada: `D_lleno = 3 cm` (100 %), `D_vacío = 30 cm` (0 %).
+En la maqueta simulada: `D_lleno = 3 cm` (100 %), `D_vacío = 20 cm` (0 %).
 
 ### 3.2.2 Déficit de presión de vapor (VPD)
 
@@ -92,7 +92,7 @@ sequenceDiagram
     participant BME280
     participant INA219
     participant HCSR04
-    participant OLED
+    participant LCD
     participant LEDs_Buzzer as LEDs/Buzzer
 
     loop cada 500 ms
@@ -104,7 +104,7 @@ sequenceDiagram
         HCSR04-->>ESP32: eco ECHO (duración)
         ESP32->>ESP32: calcular nivel, VPD, radiación,\níndice evaporativo, tasa de descenso, riesgo
         ESP32->>ESP32: clasificar estado (NORMAL/PRECAUCION/CRITICO)
-        ESP32->>OLED: actualizar pantalla (mediciones o análisis)
+        ESP32->>LCD: actualizar pantalla (mediciones o análisis)
         ESP32->>LEDs_Buzzer: actualizar LED activo + tono si CRÍTICO
         ESP32->>ESP32: imprimir reporte por Serial
     end
@@ -148,7 +148,7 @@ classDiagram
         +estadoPrecaucion() void
         +estadoCritico() void
     }
-    class DisplayOLED {
+    class DisplayLCD {
         +mostrarMediciones()
         +mostrarAnalisis()
     }
@@ -166,7 +166,7 @@ classDiagram
     MainLoop --> ModuloTasaDescenso
     MainLoop --> ModuloRiesgoHidrico
     MainLoop --> ModuloActuacion
-    MainLoop --> DisplayOLED
+    MainLoop --> DisplayLCD
     SensorHCSR04 --> ModuloNivel : distancia
     SensorBME280 --> ModuloVPD : temp, humedad
     SensorINA219 --> ModuloIndiceEvaporativo : radiación
@@ -191,8 +191,8 @@ classDiagram
 | `3V3` | VCC de BME280, INA219 | Alimentación 3.3 V (bus I²C) |
 | `5V` | VCC de HC-SR04, LED rojo (ánodo), Buzzer (+) | Alimentación 5 V |
 | `GND` | GND común de todos los módulos | Tierra común |
-| `GPIO 21 (SDA)` | SDA de BME280, INA219 y OLED | Bus I²C — datos |
-| `GPIO 22 (SCL)` | SCL de BME280, INA219 y OLED | Bus I²C — reloj |
+| `GPIO 21 (SDA)` | SDA de BME280, INA219 y LCD | Bus I²C — datos |
+| `GPIO 22 (SCL)` | SCL de BME280, INA219 y LCD | Bus I²C — reloj |
 | `GPIO 5` | TRIG del HC-SR04 | Disparo del pulso ultrasónico |
 | `GPIO 18` | ECHO del HC-SR04 (vía divisor resistivo 1 kΩ/2 kΩ) | Recepción del eco (nivel de agua) |
 | `GPIO 25` | Resistencia 220 Ω → LED verde | Estado NORMAL |
@@ -217,9 +217,9 @@ Todos los módulos comparten **GND común**. Para pruebas de escritorio también
 
 | Estándar / buena práctica | Aplicación en el proyecto |
 |---|---|
-| **I²C — NXP UM10204 (Philips/NXP I2C-bus specification)** | Comunicación entre ESP32, BME280, INA219 y OLED |
+| **I²C — NXP UM10204 (Philips/NXP I2C-bus specification)** | Comunicación entre ESP32, BME280, INA219 y LCD |
 | **ANSI/ISA-18.2 (gestión de alarmas industriales)** | Principio de jerarquía de alarmas (NORMAL/PRECAUCIÓN/CRÍTICO) con reglas de seguridad que priman sobre el promedio ponderado |
-| **ANSI Z535.1 / convención semafórica de colores de seguridad** | Uso de verde = seguro, amarillo = precaución, rojo = peligro en LEDs y en la pantalla OLED |
+| **ANSI Z535.1 / convención semafórica de colores de seguridad** | Uso de verde = seguro, amarillo = precaución, rojo = peligro en LEDs y en la pantalla LCD |
 | **ISO/IEC/IEEE 42010:2011 (Architecture description)** | Documentación de la arquitectura mediante vistas de bloques (hardware/software) y diagramas UML |
 | **UML 2.5 (OMG)** | Diagramas de estados, secuencia y componentes de la [Sección 3.3](#33-diagramas-uml) |
 | **IEEE 830 / buenas prácticas de documentación de requisitos** | Trazabilidad entre restricciones de diseño (Sección 2.1), criterios de diseño (Sección 3.1) y pruebas (Sección 5) |
