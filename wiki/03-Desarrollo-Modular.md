@@ -85,6 +85,12 @@ Este índice:
 
 Representa, en una escala relativa, qué tan favorables son las condiciones ambientales para la evaporación.
 
+**Papel de la presión atmosférica.** La presión no se emplea como indicador de riesgo: en una estación fija de la región tropical su variación es de apenas un par de hectopascales sobre una presión de fondo de ~745 hPa, y no cambia cuando hay desabastecimiento. Sí participa como **parámetro del modelo de evaporación**, a través de la constante psicrométrica `γ = 0.665·10⁻³·P`, que determina el reparto de Penman entre el término radiativo y el aerodinámico.
+
+A menor presión, menor γ, y el reparto se inclina hacia la evaporación: a los 2550 m de Sabana Centro el factor de corrección vale aproximadamente **1.10** frente a nivel del mar, y se aplica al componente de irradiancia del índice. Un modelo calibrado con parámetros de nivel del mar subestimaría la demanda evaporativa local.
+
+La corrección **no** se aplica al término de VPD. Aunque la humedad específica lleva la presión dividiendo, la densidad del aire la lleva multiplicando, y en el flujo de transferencia de masa ambas se cancelan: a VPD fijo, la evaporación aerodinámica no depende de la presión atmosférica.
+
 ---
 
 ### 3.2.4 Tasa e índice de descenso
