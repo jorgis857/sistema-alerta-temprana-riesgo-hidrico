@@ -16,7 +16,7 @@ Aunque el proyecto nace como un reto académico, se plantea un modelo de negocio
 | **Recursos clave** | Firmware propio (lógica de fusión validada), diseño de hardware replicable, conocimiento del dominio hidrológico regional, relación con actores institucionales locales. |
 | **Actividades clave** | Ensamblaje y calibración de nodos, instalación en campo, soporte técnico, actualización del firmware, generación de reportes agregados de riesgo regional (offline, por recolección manual de datos si se requiere históricos). |
 | **Socios clave** | CAR Cundinamarca, IDEAM, alcaldías de Sabana Centro, proveedores de componentes electrónicos, juntas de acueductos veredales, Universidad de La Sabana (transferencia de conocimiento). |
-| **Estructura de costos** | Componentes electrónicos por unidad (ESP32, sensores, OLED, batería, panel solar), carcasa/impermeabilización, mano de obra de ensamblaje e instalación, mantenimiento periódico, capacitación comunitaria. |
+| **Estructura de costos** | Componentes electrónicos por unidad (ESP32, sensores, LCD 16×2 I²C, batería, panel solar), carcasa/impermeabilización, mano de obra de ensamblaje e instalación, mantenimiento periódico, capacitación comunitaria. |
 
 ## 4.2 Estimación preliminar de costo por unidad (referencial)
 
@@ -26,7 +26,7 @@ Aunque el proyecto nace como un reto académico, se plantea un modelo de negocio
 | BME280 | 20 000 |
 | HC-SR04 | 8 000 |
 | Mini panel solar + INA219 | 30 000 |
-| OLED SSD1306 | 20 000 |
+| LCD 16×2 I²C | 0 |
 | LEDs + resistencias + buzzer | 10 000 |
 | Batería 18650 + TP4056 + MT3608 | 30 000 |
 | Carcasa/protección IP + soportes mecánicos | 40 000 |

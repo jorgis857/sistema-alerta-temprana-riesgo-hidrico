@@ -7,224 +7,560 @@
 | Criterio | Decisión de diseño | Justificación |
 |---|---|---|
 | **Independencia de red** | Toda la lógica de decisión corre en el ESP32; no hay llamadas a servicios externos | Cumple la restricción de notificación *in situ* sin redes de comunicación |
-| **Modularidad funcional** | El firmware se organiza en funciones puras por responsabilidad (lectura de sensores, cálculo de nivel, cálculo de VPD, cálculo de índice evaporativo, cálculo de tasa de descenso, cálculo de riesgo, actuación) | Facilita pruebas unitarias, mantenimiento y reemplazo de sensores sin reescribir la lógica de fusión |
-| **Múltiples señales, una decisión** | El riesgo hídrico no depende de una sola variable, sino de la fusión ponderada de tres índices + reglas de seguridad | Responde directamente a la pregunta guía del reto: "combinar múltiples señales ambientales críticas mediante lógica de fusión" |
-| **Ninguna variable crítica queda oculta por el promedio** | Se agregan reglas de seguridad (*hard thresholds*) independientes al promedio ponderado | Evita falsos negativos: p. ej., un nivel del 10 % con bajo índice evaporativo no debe "diluirse" a un estado NORMAL |
-| **Calibración simple y replicable** | El nivel se calibra con solo 2 parámetros (`DISTANCIA_LLENO`, `DISTANCIA_VACIO`) | Permite reutilizar el mismo firmware en distintos reservorios de la región Sabana Centro |
-| **Simulación antes de hardware físico** | Validación completa en Wokwi con *custom chips* en C antes de ensamblar hardware real | Reduce riesgo y costo de iteración; permite verificar la lógica de fusión con controles interactivos |
-| **Bajo consumo / operación remota** | Alimentación por batería recargable con panel solar; ciclo de refresco de pantalla de 500 ms (no continuo a máxima velocidad) | Extiende la autonomía en campo, donde no siempre hay red eléctrica |
-| **Legibilidad para usuarios no técnicos** | El LCD alterna dos pantallas (mediciones crudas / análisis y estado) y los LEDs usan el código de color universal semáforo (verde/amarillo/rojo) | La alerta debe ser comprensible por miembros de la comunidad sin formación técnica |
+| **Modularidad funcional** | El firmware se organiza por responsabilidades: lectura de sensores, cálculo de nivel, VPD, índice evaporativo, tasa de descenso, riesgo y actuación | Facilita mantenimiento, depuración y reemplazo de sensores |
+| **Múltiples señales, una decisión** | El riesgo hídrico depende de la fusión de nivel, condiciones evaporativas y tendencia | Responde a la necesidad de combinar múltiples señales para una alerta más completa |
+| **Ninguna variable crítica queda oculta por el promedio** | Se incorporan reglas de seguridad independientes al promedio ponderado | Reduce el riesgo de falsos negativos ante condiciones individuales extremas |
+| **Calibración simple** | El nivel se ajusta mediante parámetros de distancia correspondientes a lleno y vacío | Permite adaptar el sistema a distintas geometrías |
+| **Simulación antes del montaje físico** | Se validó inicialmente la arquitectura y lógica en Wokwi | Redujo errores antes de integrar sensores reales |
+| **Validación física posterior** | El sistema fue implementado sobre una maqueta funcional | Permite verificar sensores, actuadores y comportamiento real del sistema |
+| **Legibilidad para usuarios no técnicos** | LCD 16×2 I²C + LEDs semafóricos + buzzer | Facilita la interpretación local del estado |
+| **Enfoque en la problemática hídrica** | El nivel y su tendencia son las variables principales; la presión se mantiene como contexto | Mantiene la lógica alineada con el riesgo de disponibilidad y desabastecimiento |
+
+---
 
 ## 3.2 Modelo matemático de fusión de datos
 
 ### 3.2.1 Nivel del reservorio
 
-$$Nivel\ (\%) = \frac{D_{vacío} - D_{medida}}{D_{vacío} - D_{lleno}} \times 100 \quad \text{(saturado entre 0 y 100)}$$
+El porcentaje de nivel se calcula a partir de la distancia medida por el sensor ultrasónico:
 
-En la maqueta simulada: `D_lleno = 3 cm` (100 %), `D_vacío = 20 cm` (0 %).
+```text
+Nivel (%) =
+100 × (D_vacío - D_medida)
+      ----------------------
+      (D_vacío - D_lleno)
+```
 
-### 3.2.2 Déficit de presión de vapor (VPD)
+El resultado se limita al rango:
 
-$$e_s = 0.6108 \cdot e^{\frac{17.27\,T}{T + 237.3}} \qquad e_a = e_s \cdot \frac{HR}{100} \qquad VPD = e_s - e_a \ \text{[kPa]}$$
+```text
+0 % ≤ Nivel ≤ 100 %
+```
 
-Un VPD mayor indica un aire con mayor capacidad de "aceptar" vapor de agua adicional, es decir, condiciones más favorables para la evaporación.
+En la implementación física, `D_lleno` y `D_vacío` corresponden a la calibración real de la maqueta.
+
+---
+
+### 3.2.2 Déficit de presión de vapor — VPD
+
+La temperatura y la humedad relativa permiten calcular el déficit de presión de vapor.
+
+De forma general:
+
+```text
+e_s = presión de vapor de saturación
+e_a = presión de vapor actual
+
+VPD = e_s - e_a
+```
+
+El VPD representa la capacidad del aire para aceptar vapor de agua adicional.
+
+Un valor mayor indica condiciones más favorables para la evaporación.
+
+---
 
 ### 3.2.3 Índice evaporativo
 
-$$Indice_{evap}\ (\%) = 100 \times \left[0.50 \cdot \min\!\left(\frac{Radiación}{1000},1\right) + 0.50 \cdot \min\!\left(\frac{VPD}{3},1\right)\right]$$
+El índice evaporativo combina dos variables normalizadas:
 
-Este porcentaje **no** representa la fracción de agua que se evaporará; representa qué tan intensas son, en una escala relativa 0–100 %, las condiciones ambientales para la pérdida de agua por evaporación.
+```text
+VPD
++
+Irradiancia estimada
+```
+
+Conceptualmente:
+
+```text
+Índice_evap (%) =
+50 % componente de irradiancia
++
+50 % componente de VPD
+```
+
+Este índice:
+
+> **No representa el porcentaje de agua que se evapora.**
+
+Representa, en una escala relativa, qué tan favorables son las condiciones ambientales para la evaporación.
+
+---
 
 ### 3.2.4 Tasa e índice de descenso
 
-$$Regresión por mínimos cuadrados en 20s, en pp/min
+La tasa de descenso compara el nivel en diferentes momentos:
 
-$$Indice_{descenso}\ (\%) = \min\!\left(\frac{Tasa}{5.0},\,1\right)\times 100$$
+```text
+Tasa de descenso =
+Nivel_anterior - Nivel_actual
+-----------------------------
+Tiempo transcurrido
+```
 
-En simulación, cada **10 segundos** representa **1 hora** real (`INTERVALO_TASA_MS = 10000`), lo que permite observar tendencias de descenso sin esperar tiempo real. En hardware físico, esta constante se reconfigura a `3 600 000 ms`.
+Cuando el nivel aumenta o permanece estable, el descenso se considera nulo.
 
-### 3.2.5 Riesgo hídrico (fusión final)
+La tasa permite detectar situaciones en las que el reservorio pierde disponibilidad rápidamente.
 
-$$Riesgo\ (\%) = 0.50 \cdot (100 - Nivel) + 0.30 \cdot Indice_{evap} + 0.20 \cdot Indice_{descenso}$$
+---
+
+### 3.2.5 Riesgo hídrico
+
+El riesgo general se calcula mediante:
+
+```text
+Riesgo =
+0.50 × Déficit de nivel
++
+0.30 × Índice evaporativo
++
+0.20 × Índice de descenso
+```
+
+La mayor ponderación corresponde al nivel porque representa directamente la disponibilidad actual de agua.
+
+---
 
 ### 3.2.6 Reglas de clasificación de estado
 
-| Estado | Condición (basta con que se cumpla **una**) |
-|---|---|
-| 🔴 **CRÍTICO** | Riesgo ≥ 70 % **o** Nivel ≤ 15 % **o** Índice evaporativo ≥ 85 % **o** Tasa de descenso ≥ 68 pp/h |
-| 🟡 **PRECAUCIÓN** | Riesgo ≥ 35 % **o** Nivel ≤ 40 % **o** Índice evaporativo ≥ 60 % **o** Tasa de descenso ≥ 33 pp/h |
-| 🟢 **NORMAL** | Ninguna de las anteriores |
+La lógica de clasificación incorpora el índice ponderado y reglas de seguridad.
 
-> Estos umbrales son parámetros iniciales de diseño (definidos en las constantes `TASA_PRECAUCION`, `TASA_CRITICA`, `RADIACION_REFERENCIA`, `VPD_REFERENCIA` del firmware) y deben ajustarse experimentalmente según la geometría real de cada reservorio y las condiciones climáticas locales de cada punto de instalación en Sabana Centro.
+| Estado | Condición general |
+|---|---|
+| 🔴 **CRÍTICO** | Riesgo elevado o alguna variable individual alcanza un umbral crítico |
+| 🟡 **PRECAUCIÓN** | Riesgo intermedio o alguna variable supera su umbral de advertencia |
+| 🟢 **NORMAL** | Ninguna condición de precaución o crítica está activa |
+
+La implementación utiliza umbrales definidos en el firmware para:
+
+- nivel;
+- índice evaporativo;
+- tasa de descenso;
+- riesgo combinado.
+
+Estos valores corresponden a parámetros iniciales de diseño y pueden recalibrarse para una instalación real.
+
+---
 
 ## 3.3 Diagramas UML
 
-### 3.3.1 Diagrama de estados (máquina de estados de alerta)
+### 3.3.1 Diagrama de estados
 
 ```mermaid
 stateDiagram-v2
     [*] --> NORMAL
-    NORMAL --> PRECAUCION: riesgo>=35% OR nivel<=40% OR\nevap>=60% OR descenso>=2pp/h
-    PRECAUCION --> CRITICO: riesgo>=70% OR nivel<=15% OR\nevap>=85% OR descenso>=5pp/h
-    PRECAUCION --> NORMAL: condiciones vuelven\na rango normal
-    CRITICO --> PRECAUCION: condiciones bajan\nde umbral crítico
-    NORMAL --> CRITICO: condición crítica\nsúbita (regla de seguridad)
+
+    NORMAL --> PRECAUCION: condición de advertencia
+    PRECAUCION --> CRITICO: condición crítica
+    PRECAUCION --> NORMAL: condiciones mejoran
+    CRITICO --> PRECAUCION: riesgo disminuye
+    NORMAL --> CRITICO: condición crítica súbita
 
     state NORMAL {
-        [*] --> LED_Verde_ON
-        LED_Verde_ON: LED verde ON · buzzer OFF
+        [*] --> LED_Verde
+        LED_Verde: LCD = NORMAL
+        LED_Verde: LED verde activo
+        LED_Verde: buzzer apagado
     }
+
     state PRECAUCION {
-        [*] --> LED_Amarillo_ON
-        LED_Amarillo_ON: LED amarillo ON · buzzer OFF
+        [*] --> LED_Amarillo
+        LED_Amarillo: LCD = PRECAUCIÓN
+        LED_Amarillo: LED amarillo activo
     }
+
     state CRITICO {
-        [*] --> LED_Rojo_ON
-        LED_Rojo_ON: LED rojo ON · buzzer tone(1000Hz)
+        [*] --> LED_Rojo
+        LED_Rojo: LCD = CRÍTICO
+        LED_Rojo: LED rojo activo
+        LED_Rojo: buzzer activo
     }
 ```
 
-### 3.3.2 Diagrama de secuencia (un ciclo de medición)
+---
+
+### 3.3.2 Diagrama de secuencia
 
 ```mermaid
 sequenceDiagram
     participant ESP32
     participant BME280
     participant INA219
-    participant HCSR04
+    participant ULTRA as Sensor ultrasónico
     participant LCD
-    participant LEDs_Buzzer as LEDs/Buzzer
+    participant ACT as LEDs/Buzzer
 
-    loop cada 500 ms
-        ESP32->>BME280: leer temperatura, humedad, presión (I2C 0x76)
+    loop Ciclo de medición
+        ESP32->>BME280: Leer temperatura, humedad y presión
         BME280-->>ESP32: T, HR, P
-        ESP32->>INA219: leer corriente del panel solar (I2C 0x40)
-        INA219-->>ESP32: corriente (mA)
-        ESP32->>HCSR04: pulso TRIG
-        HCSR04-->>ESP32: eco ECHO (duración)
-        ESP32->>ESP32: calcular nivel, VPD, radiación,\níndice evaporativo, tasa de descenso, riesgo
-        ESP32->>ESP32: clasificar estado (NORMAL/PRECAUCION/CRITICO)
-        ESP32->>LCD: actualizar pantalla (mediciones o análisis)
-        ESP32->>LEDs_Buzzer: actualizar LED activo + tono si CRÍTICO
-        ESP32->>ESP32: imprimir reporte por Serial
+
+        ESP32->>INA219: Leer señal del panel
+        INA219-->>ESP32: Corriente / señal
+
+        ESP32->>ULTRA: Enviar pulso TRIG
+        ULTRA-->>ESP32: Retornar duración ECHO
+
+        ESP32->>ESP32: Calcular nivel
+        ESP32->>ESP32: Calcular VPD
+        ESP32->>ESP32: Estimar irradiancia
+        ESP32->>ESP32: Calcular índice evaporativo
+        ESP32->>ESP32: Actualizar tasa de descenso
+        ESP32->>ESP32: Calcular riesgo
+        ESP32->>ESP32: Clasificar estado
+
+        ESP32->>LCD: Actualizar información
+        ESP32->>ACT: Actualizar LEDs y buzzer
     end
 ```
 
-### 3.3.3 Diagrama de componentes / módulos de software
+---
+
+### 3.3.3 Diagrama de componentes de software
 
 ```mermaid
 classDiagram
+
     class SensorBME280 {
-        +readTemperatureRaw() int16
-        +readHumidityRaw() uint16
-        +readPressureRaw() uint32
+        +leerTemperatura()
+        +leerHumedad()
+        +leerPresion()
     }
+
     class SensorINA219 {
-        +readINA219CurrentRaw() uint16
+        +leerCorriente()
     }
-    class SensorHCSR04 {
-        +medirDistancia() float
+
+    class SensorUltrasonico {
+        +medirDistancia()
     }
+
     class ModuloNivel {
-        +calcularNivel(distancia) float
+        +calcularNivel()
     }
+
     class ModuloVPD {
-        +calcularVPD(temp, humedad) float
+        +calcularVPD()
     }
-    class ModuloIndiceEvaporativo {
-        +calcularIndiceEvaporativo(radiacion, vpd) float
+
+    class ModuloEvaporacion {
+        +calcularIndiceEvaporativo()
     }
-    class ModuloTasaDescenso {
-        -nivelAnterior float
-        -tasaDescenso float
-        -indiceDescenso float
-        +actualizarTasaDescenso(nivelActual) void
+
+    class ModuloTasa {
+        +actualizarTasaDescenso()
     }
-    class ModuloRiesgoHidrico {
-        +calcularRiesgoHidrico(nivel, indiceEvap, indiceDescenso) float
+
+    class ModuloRiesgo {
+        +calcularRiesgo()
+        +clasificarEstado()
     }
-    class ModuloActuacion {
-        +estadoNormal() void
-        +estadoPrecaucion() void
-        +estadoCritico() void
-    }
+
     class DisplayLCD {
-        +mostrarMediciones()
-        +mostrarAnalisis()
+        +mostrarInformacion()
+        +mostrarEstado()
     }
+
+    class ModuloActuacion {
+        +estadoNormal()
+        +estadoPrecaucion()
+        +estadoCritico()
+    }
+
     class MainLoop {
-        +setup() void
-        +loop() void
+        +setup()
+        +loop()
     }
 
     MainLoop --> SensorBME280
     MainLoop --> SensorINA219
-    MainLoop --> SensorHCSR04
-    MainLoop --> ModuloNivel
-    MainLoop --> ModuloVPD
-    MainLoop --> ModuloIndiceEvaporativo
-    MainLoop --> ModuloTasaDescenso
-    MainLoop --> ModuloRiesgoHidrico
-    MainLoop --> ModuloActuacion
+    MainLoop --> SensorUltrasonico
+
+    SensorUltrasonico --> ModuloNivel
+    SensorBME280 --> ModuloVPD
+    SensorINA219 --> ModuloEvaporacion
+    ModuloVPD --> ModuloEvaporacion
+
+    ModuloNivel --> ModuloTasa
+    ModuloNivel --> ModuloRiesgo
+    ModuloEvaporacion --> ModuloRiesgo
+    ModuloTasa --> ModuloRiesgo
+
     MainLoop --> DisplayLCD
-    SensorHCSR04 --> ModuloNivel : distancia
-    SensorBME280 --> ModuloVPD : temp, humedad
-    SensorINA219 --> ModuloIndiceEvaporativo : radiación
-    ModuloVPD --> ModuloIndiceEvaporativo : VPD
-    ModuloNivel --> ModuloTasaDescenso : nivel
-    ModuloNivel --> ModuloRiesgoHidrico : nivel
-    ModuloIndiceEvaporativo --> ModuloRiesgoHidrico : índice evaporativo
-    ModuloTasaDescenso --> ModuloRiesgoHidrico : índice descenso
-    ModuloRiesgoHidrico --> ModuloActuacion : riesgo + estado
+    MainLoop --> ModuloActuacion
+
+    ModuloRiesgo --> DisplayLCD
+    ModuloRiesgo --> ModuloActuacion
 ```
-
-## 3.4 Esquemático de hardware
-
-![Diagrama de circuito en Wokwi](images/diagrama_circuito_wokwi.png)
-
-*(Imagen también disponible en [`/hardware/schematics/diagrama_circuito_wokwi.png`](../hardware/schematics/diagrama_circuito_wokwi.png); diagrama fuente editable en [`/hardware/wokwi/diagram.json`](../hardware/wokwi/diagram.json)).*
-
-### 3.4.1 Mapa de pines (ESP32 DevKit-C)
-
-| Pin ESP32 | Conectado a | Función |
-|---|---|---|
-| `3V3` | VCC de BME280, INA219 | Alimentación 3.3 V (bus I²C) |
-| `5V` | VCC de HC-SR04, LED rojo (ánodo), Buzzer (+) | Alimentación 5 V |
-| `GND` | GND común de todos los módulos | Tierra común |
-| `GPIO 21 (SDA)` | SDA de BME280, INA219 y LCD | Bus I²C — datos |
-| `GPIO 22 (SCL)` | SCL de BME280, INA219 y LCD | Bus I²C — reloj |
-| `GPIO 5` | TRIG del HC-SR04 | Disparo del pulso ultrasónico |
-| `GPIO 18` | ECHO del HC-SR04 (vía divisor resistivo 1 kΩ/2 kΩ) | Recepción del eco (nivel de agua) |
-| `GPIO 25` | Resistencia 220 Ω → LED verde | Estado NORMAL |
-| `GPIO 26` | Resistencia 220 Ω → LED amarillo | Estado PRECAUCIÓN |
-| `GPIO 27` | Resistencia 220 Ω → LED rojo | Estado CRÍTICO |
-| `GPIO 19` | Buzzer (−) | Alarma sonora |
-| — | Panel solar `POS/NEG` → INA219 `VIN+/VIN-` | Señal analógica de radiación solar |
-
-> **Nota de diseño:** en el circuito, los LEDs se conectan con lógica **activa en bajo** (`LOW` = encendido, `HIGH` = apagado), documentado explícitamente en el firmware (`sketch.ino`, sección `LEDS`).
-
-## 3.5 Alimentación y energía
-
-Para la versión portátil (fuera del laboratorio/simulación) se dimensionó la siguiente cadena de energía:
-
-```
-Panel solar → (recarga) → Batería Li-ion 18650 (3.7 V) → TP4056 (carga + protección) → MT3608 (boost a 5 V) → ESP32
-```
-
-Todos los módulos comparten **GND común**. Para pruebas de escritorio también es válida la alimentación directa por cable USB o *power bank*, migrando posteriormente a la batería para despliegue en campo.
-
-## 3.6 Estándares de ingeniería aplicados
-
-| Estándar / buena práctica | Aplicación en el proyecto |
-|---|---|
-| **I²C — NXP UM10204 (Philips/NXP I2C-bus specification)** | Comunicación entre ESP32, BME280, INA219 y LCD |
-| **ANSI/ISA-18.2 (gestión de alarmas industriales)** | Principio de jerarquía de alarmas (NORMAL/PRECAUCIÓN/CRÍTICO) con reglas de seguridad que priman sobre el promedio ponderado |
-| **ANSI Z535.1 / convención semafórica de colores de seguridad** | Uso de verde = seguro, amarillo = precaución, rojo = peligro en LEDs y en la pantalla LCD |
-| **ISO/IEC/IEEE 42010:2011 (Architecture description)** | Documentación de la arquitectura mediante vistas de bloques (hardware/software) y diagramas UML |
-| **UML 2.5 (OMG)** | Diagramas de estados, secuencia y componentes de la [Sección 3.3](#33-diagramas-uml) |
-| **IEEE 830 / buenas prácticas de documentación de requisitos** | Trazabilidad entre restricciones de diseño (Sección 2.1), criterios de diseño (Sección 3.1) y pruebas (Sección 5) |
-| **Buenas prácticas de *coding style* Arduino/C++ (comentarios por bloque, nombres descriptivos, funciones de responsabilidad única)** | Estructura del archivo `firmware/sketch.ino` |
-| **Guías del IDEAM/OMM para monitoreo hidrometeorológico comunitario** | Selección de variables físicas monitoreadas (nivel, temperatura, humedad, presión, radiación) coherentes con boletines de riesgo hídrico regional |
 
 ---
+
+## 3.4 Arquitectura física
+
+La versión final presentada utiliza los siguientes componentes:
+
+```text
+                 ┌───────────────┐
+                 │     ESP32     │
+                 │ procesamiento │
+                 └───────┬───────┘
+                         │
+       ┌─────────────────┼──────────────────┐
+       │                 │                  │
+       ▼                 ▼                  ▼
+Sensor ultrasónico     BME280        Panel + INA219
+Nivel                  T / HR / P     Irradiancia aprox.
+
+                         │
+                         ▼
+                 Procesamiento local
+                         │
+                         ▼
+              NORMAL / PRECAUCIÓN /
+                     CRÍTICO
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+      LCD 16×2         LEDs           Buzzer
+```
+
+La simulación original de Wokwi se conserva en la carpeta `/hardware/wokwi` como evidencia del proceso de diseño previo.
+
+El hardware físico final utiliza una LCD 16×2 I²C como interfaz local.
+
+---
+
+## 3.5 Comunicación I²C
+
+El sistema aprovecha el bus I²C para conectar varios módulos al ESP32.
+
+Los dispositivos principales son:
+
+| Dispositivo | Interfaz |
+|---|---|
+| BME280 | I²C |
+| INA219 | I²C |
+| LCD 16×2 | I²C |
+
+El bus utiliza las líneas:
+
+```text
+SDA
+SCL
+```
+
+compartidas entre los dispositivos.
+
+Cada módulo utiliza una dirección propia, permitiendo que el ESP32 pueda comunicarse con varios periféricos sobre el mismo bus.
+
+---
+
+## 3.6 Sensor ultrasónico
+
+El sensor ultrasónico utiliza dos señales digitales:
+
+```text
+TRIG
+ECHO
+```
+
+El ESP32 genera un pulso sobre `TRIG`.
+
+El sensor responde mediante `ECHO`, cuya duración permite estimar la distancia.
+
+De manera simplificada:
+
+```text
+ESP32
+  │
+  ├── TRIG ──→ Sensor
+  │
+  └── ECHO ←── Sensor
+```
+
+Esta distancia se transforma posteriormente en porcentaje de nivel.
+
+---
+
+## 3.7 Pantalla LCD 16×2 I²C
+
+La interfaz física final utiliza una pantalla LCD 16×2 con adaptador I²C.
+
+La pantalla cumple dos funciones principales:
+
+1. presentar información relevante del sistema;
+2. mostrar al usuario el estado de riesgo.
+
+Debido a la limitación de 16 caracteres por 2 filas, la interfaz prioriza la información esencial y organiza las variables en diferentes vistas o ciclos de actualización.
+
+El procesamiento de todas las variables continúa realizándose internamente en el ESP32 aunque no todas se muestren simultáneamente.
+
+---
+
+## 3.8 LEDs y buzzer
+
+Los LEDs utilizan una codificación semafórica:
+
+```text
+Verde     → NORMAL
+Amarillo  → PRECAUCIÓN
+Rojo      → CRÍTICO
+```
+
+El buzzer actúa como alarma sonora adicional en el estado crítico.
+
+Esto proporciona dos mecanismos de notificación:
+
+```text
+VISUAL
+LCD + LEDs
+
+SONORO
+Buzzer
+```
+
+---
+
+## 3.9 Diseño de la maqueta
+
+Para validar el sensor de nivel se construyó una maqueta con una plataforma móvil.
+
+La plataforma representa la superficie del agua.
+
+```text
+Plataforma arriba
+       ↓
+Distancia pequeña
+       ↓
+Nivel alto
+
+Plataforma abajo
+       ↓
+Distancia grande
+       ↓
+Nivel bajo
+```
+
+Esta solución permitió:
+
+- controlar la distancia;
+- repetir escenarios;
+- observar las transiciones de estado;
+- evitar contacto entre agua y electrónica;
+- acelerar las pruebas durante la validación.
+
+---
+
+## 3.10 Estrategia de simulación
+
+Antes del montaje físico se desarrolló una versión funcional en Wokwi.
+
+La simulación permitió:
+
+- validar el sensor ultrasónico;
+- comprobar el bus I²C;
+- simular temperatura, humedad y presión;
+- simular el panel y el INA219;
+- probar la lógica matemática;
+- modificar las variables mediante controles;
+- verificar NORMAL, PRECAUCIÓN y CRÍTICO.
+
+En Wokwi se utilizaron *custom chips* para representar componentes que requerían comportamiento configurable.
+
+La simulación original utiliza una pantalla OLED como componente virtual. Posteriormente, durante la implementación física, esta interfaz fue reemplazada por una **LCD 16×2 I²C** disponible para el equipo.
+
+Este cambio no modifica la arquitectura lógica del sistema: ambos dispositivos cumplen la función de visualización local mediante I²C.
+
+---
+
+## 3.11 Estrategia de implementación física
+
+Después de validar la lógica en simulación se integró el prototipo físico.
+
+El proceso general fue:
+
+```text
+Prueba del ESP32
+      ↓
+Sensor ultrasónico
+      ↓
+LCD + buzzer
+      ↓
+BME280
+      ↓
+Panel + INA219
+      ↓
+LEDs
+      ↓
+Integración completa
+      ↓
+Calibración
+      ↓
+Pruebas de estados
+```
+
+Durante esta etapa se realizaron ajustes propios del hardware real, especialmente relacionados con:
+
+- calibración de distancia;
+- estabilidad de las lecturas;
+- bus I²C;
+- actuación de LEDs;
+- comportamiento del buzzer;
+- organización de la información en la LCD.
+
+---
+
+## 3.12 Estándares y buenas prácticas de ingeniería
+
+| Estándar / práctica | Aplicación |
+|---|---|
+| **I²C** | Comunicación entre ESP32, BME280, INA219 y LCD |
+| **UML** | Modelado de estados, secuencia y componentes |
+| **Codificación semafórica** | Verde = normal, amarillo = precaución, rojo = crítico |
+| **Diseño modular** | Separación de lectura, procesamiento, fusión y actuación |
+| **Validación progresiva** | Simulación antes de implementación física |
+| **Reglas de seguridad** | Condiciones críticas individuales pueden prevalecer sobre el promedio |
+| **Procesamiento local** | El sistema no depende de servicios externos para generar alertas |
+| **Calibración** | Los parámetros del nivel se ajustan a la geometría del sistema evaluado |
+
+---
+
+## 3.13 Flujo completo del sistema
+
+```text
+SENSOR ULTRASÓNICO
+        ↓
+      NIVEL
+        │
+        │
+        ├───────────────────────────┐
+        │                           │
+        ▼                           │
+ DÉFICIT DE NIVEL                   │
+      50 %                          │
+                                    │
+BME280                              │
+T + HR                              │
+  ↓                                 │
+ VPD ─────────┐                     │
+              ├→ ÍNDICE EVAP. ─────┤
+PANEL         │       30 %          │
+  ↓           │                     │
+INA219        │                     │
+  ↓           │                     │
+IRRADIANCIA ──┘                     │
+                                    ├→ RIESGO
+NIVEL EN EL TIEMPO                  │
+        ↓                           │
+TASA DE DESCENSO ───────────────────┘
+       20 %
+        ↓
+REGLAS DE SEGURIDAD
+        ↓
+NORMAL / PRECAUCIÓN / CRÍTICO
+        ↓
+LCD + LEDs + Buzzer
+```
+
+---
+
 [⬅ Anterior: Solución propuesta](02-Solucion-Propuesta.md) · [⬆ Índice](00-Home.md) · [Siguiente: Modelo de negocio ➡](04-Modelo-de-Negocio.md)

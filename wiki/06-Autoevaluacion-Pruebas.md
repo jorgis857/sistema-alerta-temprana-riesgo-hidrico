@@ -2,41 +2,152 @@
 
 # 6. Autoevaluación del protocolo de pruebas
 
-Esta sección evalúa críticamente el propio protocolo de pruebas descrito en la [Sección 5](05-Configuracion-Experimental-Resultados.md), identificando sus fortalezas y limitaciones.
+Esta sección evalúa de forma crítica el protocolo de validación aplicado a WREWS, considerando tanto la etapa de simulación como la implementación física del prototipo.
+
+---
 
 ## 6.1 Checklist de cobertura del protocolo
 
 | Criterio | ¿Se cumple? | Evidencia / observación |
 |---|---|---|
-| Se prueban los tres estados de alerta (NORMAL, PRECAUCIÓN, CRÍTICO) | ✅ Sí | Casos C1 (NORMAL), C2–C4 (PRECAUCIÓN), C5–C8 (CRÍTICO) |
-| Se prueba cada una de las 4 condiciones que disparan el estado CRÍTICO de forma aislada | ✅ Sí | C5 (nivel), C6 (evaporación), C7 (tasa de descenso), C8 (riesgo combinado) |
-| Se prueba cada una de las 4 condiciones que disparan PRECAUCIÓN | ⚠️ Parcial | Se cubren nivel (C3) y evaporación (C4) y riesgo combinado (C2); no se aisló un caso "puro" de PRECAUCIÓN disparado únicamente por tasa de descenso ≥ 2 pp/h |
-| Se valida la coherencia entre el modelo matemático teórico y el cálculo real del firmware | ✅ Sí | Recalculo independiente en Python de VPD, radiación, índice evaporativo y riesgo para los 8 casos (Sección 5.2) |
-| Se valida la cadena completa de hardware simulado (panel solar → INA219 → ESP32) | ✅ Sí | Verificación de que la radiación recuperada coincide con la irradiancia configurada (Sección 5.3, punto 2) |
-| Se prueban condiciones límite (*edge cases*) exactamente en los umbrales (35 %, 40 %, 60 %, 70 %, 85 %, 15 %, 2 pp/h, 5 pp/h) | ❌ No realizado | El protocolo actual prueba valores claramente dentro de cada rango, no exactamente en el borde del umbral; se recomienda como trabajo futuro |
-| Se prueba la recuperación del sistema (de CRÍTICO a PRECAUCIÓN a NORMAL) | ❌ No realizado en esta iteración | Solo se validaron transiciones hacia estados de mayor riesgo; falta un caso de "mejora de condiciones" |
-| Se valida el comportamiento del OLED en sus dos vistas (mediciones / análisis) | ✅ Sí (validación visual en Wokwi) | Alternancia cada 3 s verificada por inspección directa del simulador |
-| Se valida la actuación física (LEDs y buzzer) para cada estado | ✅ Sí (validación visual/sonora en Wokwi) | Verificado en el simulador; polaridad activa en bajo confirmada contra el código |
-| Se documenta el procedimiento de forma reproducible (parámetros exactos por caso) | ✅ Sí | Tabla de la Sección 5.2 con valores exactos de entrada por caso |
+| Se prueban los tres estados de alerta: NORMAL, PRECAUCIÓN y CRÍTICO | ✅ Sí | Verificados en simulación y posteriormente sobre el prototipo físico |
+| Se valida la lectura del nivel mediante sensor ultrasónico | ✅ Sí | La plataforma móvil permitió reproducir diferentes alturas y comprobar la variación del porcentaje de nivel |
+| Se valida la adquisición de temperatura, humedad y presión | ✅ Sí | Lecturas obtenidas correctamente mediante el BME280 |
+| Se valida el subsistema panel fotovoltaico + INA219 | ✅ Sí | La señal medida respondió a cambios de iluminación y fue utilizada para estimar irradiancia |
+| Se valida el cálculo del VPD | ✅ Sí | Verificado durante las pruebas de simulación y procesamiento del firmware |
+| Se valida el índice de condiciones favorables a la evaporación | ✅ Sí | Se comprobó la respuesta ante cambios en temperatura, humedad e irradiancia |
+| Se valida la tasa de descenso | ✅ Sí | El firmware compara mediciones sucesivas del nivel para identificar descensos acelerados |
+| Se valida la lógica de fusión de información | ✅ Sí | Se probaron escenarios de riesgo dependientes de nivel, evaporación, tendencia y riesgo combinado |
+| Se valida la actuación visual mediante LEDs | ✅ Sí | Verde para NORMAL, amarillo para PRECAUCIÓN y rojo para CRÍTICO |
+| Se valida la alarma sonora | ✅ Sí | El buzzer se activa correctamente en el estado CRÍTICO |
+| Se valida la visualización local | ✅ Sí | La LCD 16×2 I²C presenta información del sistema y el estado correspondiente |
+| Se valida el funcionamiento sin redes de comunicación | ✅ Sí | Toda la adquisición, procesamiento y actuación se realiza localmente en el ESP32 |
+| Se prueba el prototipo físico completo | ✅ Sí | Se verificó la cadena completa desde los sensores hasta las alertas |
+| Se prueban exactamente todos los valores en el borde de cada umbral | ⚠️ Parcial | Se probaron rangos representativos, pero no todos los valores límite exactos |
+| Se realizan pruebas prolongadas de horas o días de operación continua | ❌ No | Fuera del alcance temporal de esta iteración |
+
+---
 
 ## 6.2 Fortalezas del protocolo
 
-- Uso de un **recalculo matemático independiente** (fuera del firmware) para verificar cada resultado, en lugar de simplemente "creer" lo que muestra la pantalla — reduce el riesgo de validar un error sistemático de la propia implementación con sus propios resultados.
-- Cobertura de **las cuatro rutas de disparo del estado CRÍTICO**, que es precisamente el mecanismo de diseño más crítico del sistema (reglas de seguridad).
-- Los *custom chips* de Wokwi permiten variar cada entrada física de forma **aislada y determinística**, algo que sería mucho más difícil de controlar con hardware real en esta etapa del proyecto.
+### Validación en dos etapas
 
-## 6.3 Limitaciones identificadas y acciones correctivas propuestas
+El desarrollo utilizó primero un entorno de simulación y posteriormente hardware físico.
 
-| Limitación | Riesgo asociado | Acción correctiva |
-|---|---|---|
-| No se probaron condiciones exactamente en el borde de los umbrales | Posible comportamiento no determinístico por redondeo/truncamiento en el borde (p. ej., riesgo = 34.99 % vs. 35.00 %) | Añadir casos de prueba unitarios con valores exactos en el límite antes de pasar a hardware físico |
-| No se validó la transición de recuperación (CRÍTICO → NORMAL) | El diagrama de estados (Sección 3.3.1) lo contempla, pero no fue ejercitado en pruebas | Diseñar un caso de prueba dinámico que mejore progresivamente las condiciones y confirme el regreso a NORMAL |
-| Todas las pruebas se hicieron en simulación, no en hardware físico | Persisten riesgos no modelados en la simulación: ruido eléctrico, temperatura de la placa, calibración real del HC-SR04 en agua en movimiento, interferencia entre el bus I²C y el buzzer | Documentado explícitamente como trabajo futuro (Sección 7) antes de un despliegue en campo |
-| No se realizaron pruebas de estrés de tiempo prolongado (horas de operación continua) | Posibles fugas de memoria o *drift* de la variable `nivelAnterior` no se descartan completamente | Ejecutar una prueba de *soak test* de varias horas simuladas una vez se cuente con hardware físico |
+Esto permitió seguir una secuencia de validación progresiva:
 
-## 6.4 Conclusión de la autoevaluación
+```text
+DISEÑO
+   ↓
+SIMULACIÓN
+   ↓
+DEPURACIÓN
+   ↓
+IMPLEMENTACIÓN FÍSICA
+   ↓
+CALIBRACIÓN
+   ↓
+VALIDACIÓN
+```
 
-El protocolo de pruebas aplicado **cubre satisfactoriamente el objetivo central del reto** (validar que la lógica de fusión combina correctamente múltiples señales para generar alertas coherentes), pero **no agota** la validación necesaria para un despliegue en campo real. Se considera un protocolo adecuado para la etapa de **prototipado y simulación**, con limitaciones explícitamente reconocidas que se trasladan como recomendaciones de trabajo futuro.
+La simulación permitió modificar las entradas de manera controlada y verificar la lógica de fusión antes de incorporar las posibles fuentes de error propias del hardware real.
+
+### Cobertura funcional completa
+
+Las pruebas no se limitaron a comprobar sensores de forma independiente.
+
+También se verificó la cadena completa:
+
+```text
+SENSORES
+   ↓
+ADQUISICIÓN
+   ↓
+PROCESAMIENTO
+   ↓
+FUSIÓN
+   ↓
+CLASIFICACIÓN
+   ↓
+LCD + LEDs + BUZZER
+```
+
+Esto permitió confirmar que los módulos funcionan conjuntamente como un sistema y no solamente de manera aislada.
+
+### Pruebas de los tres estados
+
+Se comprobaron los estados:
+
+- 🟢 NORMAL
+- 🟡 PRECAUCIÓN
+- 🔴 CRÍTICO
+
+Esto permitió verificar tanto la lógica de clasificación como la respuesta física de los actuadores.
+
+### Separación entre simulación y hardware
+
+Los valores utilizados en Wokwi se mantuvieron identificados como parámetros de simulación, mientras que la implementación física se ajustó a las dimensiones y comportamiento real de la maqueta.
+
+Esto evita interpretar los valores de la simulación como una calibración definitiva para un reservorio real.
 
 ---
+
+## 6.3 Limitaciones identificadas
+
+Aunque el prototipo cumplió los objetivos funcionales del reto, el protocolo presenta algunas limitaciones propias de la etapa de prototipado.
+
+| Limitación | Implicación |
+|---|---|
+| La validación física se realizó sobre una maqueta | Los resultados confirman funcionamiento a escala de laboratorio, pero no sustituyen pruebas sobre un reservorio real |
+| La superficie del agua se representó mediante una plataforma móvil | Permite una prueba repetible del sensor ultrasónico, pero no reproduce fenómenos como oleaje o reflexiones irregulares |
+| La irradiancia se obtiene mediante un panel fotovoltaico e INA219 | La lectura funciona como estimación; una medición precisa en W/m² requeriría calibración con un instrumento de referencia |
+| Los umbrales son parámetros iniciales de diseño | Deben ajustarse con datos reales de la región y del reservorio donde se instale el sistema |
+| No se ejecutó una prueba prolongada de operación continua | No se evaluó el comportamiento del sistema durante varios días de funcionamiento |
+| No se cubrieron todos los valores exactos de borde de los umbrales | Podrían realizarse pruebas adicionales específicamente sobre cada límite matemático |
+
+---
+
+## 6.4 Evaluación del prototipo físico
+
+La implementación física permitió validar aspectos que no podían comprobarse completamente en simulación.
+
+Entre ellos:
+
+- estabilidad de las lecturas del sensor ultrasónico;
+- funcionamiento real del bus I²C;
+- lectura del BME280;
+- interacción entre panel fotovoltaico e INA219;
+- visibilidad de la información en la LCD;
+- actuación física de los LEDs;
+- funcionamiento del buzzer;
+- respuesta integrada del ESP32 ante cambios de nivel.
+
+Uno de los aspectos más importantes fue comprobar que los estados calculados por el algoritmo producen una respuesta física coherente.
+
+```text
+NORMAL
+→ LED verde
+→ buzzer apagado
+
+PRECAUCIÓN
+→ LED amarillo
+→ alerta visual
+
+CRÍTICO
+→ LED rojo
+→ buzzer activo
+```
+
+---
+
+## 6.5 Conclusión de la autoevaluación
+
+El protocolo aplicado permitió validar satisfactoriamente el objetivo central de WREWS: **adquirir múltiples variables, procesarlas localmente, fusionar la información y generar alertas tempranas coherentes ante diferentes escenarios de riesgo hídrico**.
+
+La combinación de simulación y prototipado físico fortaleció la validación, ya que permitió comprobar tanto la lógica matemática del sistema como su comportamiento real utilizando sensores y actuadores.
+
+Las principales limitaciones restantes corresponden a una futura validación de campo, calibración metrológica y pruebas prolongadas, no al funcionamiento básico del prototipo presentado.
+
+---
+
 [⬅ Anterior: Configuración experimental y resultados](05-Configuracion-Experimental-Resultados.md) · [⬆ Índice](00-Home.md) · [Siguiente: Conclusiones y trabajo futuro ➡](07-Conclusiones-Trabajo-Futuro.md)

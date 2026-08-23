@@ -1,32 +1,207 @@
 [⬅ Back to index](00-Home.md)
 
-# 10. Executive Summary (English)
+# 10. English Executive Summary
 
-> Written communication for engineering audiences is expected to demonstrate proficiency in a second language (English), per the course rubric. This page summarizes the project in English; the full technical documentation remains in Spanish across the rest of this Wiki.
+## WREWS — Water Risk Early Warning System
 
-## Project
+**WREWS (Water Risk Early Warning System)** is a low-cost IoT prototype designed to monitor water availability and generate early local warnings when conditions associated with water-scarcity risk are detected.
 
-**SATRH (Sistema de Alerta Temprana de Riesgo Hídrico / Early Water-Risk Warning System)** is a low-cost IoT prototype built on an **ESP32** microcontroller that monitors, in real time, the water level of a community reservoir, the environmental conditions that favor its evaporation, and the speed at which the level is dropping. These three signals are fused into a single **water-risk index** that drives a fully **local (in-situ) alert** — an OLED display, status LEDs, and a buzzer — with no dependency on Wi-Fi, cellular networks, or any communication infrastructure whatsoever.
+The system is built around an **ESP32** and combines three main dimensions:
 
-## Motivation
+1. **Current water availability**, estimated from the reservoir level.
+2. **Environmental conditions favorable to evaporation**, derived from temperature, relative humidity, and estimated solar irradiance.
+3. **Water-level trend**, obtained by analyzing the rate at which the level decreases over time.
 
-During 2026, Colombia's national government and IDEAM confirmed an early onset of the El Niño phenomenon, sharply increasing water-scarcity risk across the Sabana Centro region of Cundinamarca. The regional environmental authority (CAR) identified 20 municipalities at extreme risk of water shortage. Rural communities that manage small reservoirs and wells (*aljibes*) often lack the technical infrastructure to monitor these assets continuously. SATRH addresses this gap with a standalone, battery/solar-powered sensor node that requires no network connectivity and no cloud services.
+Rather than relying on a single measurement, WREWS fuses these signals into a **water-risk index** and classifies the situation into three easily understandable states:
+
+- 🟢 **NORMAL**
+- 🟡 **PRECAUTION**
+- 🔴 **CRITICAL**
+
+---
 
 ## System architecture
 
-The node integrates three sensing subsystems — a **BME280** (temperature, humidity, atmospheric pressure), an **INA219** current sensor coupled to a small **solar panel** (used as a proxy for solar irradiance), and an **HC-SR04** ultrasonic sensor (used to estimate reservoir water level). All processing — sensor fusion, risk classification, and actuation — runs entirely on the ESP32, satisfying the challenge's explicit constraint of *"in-situ notification without conventional communication networks."*
+The physical prototype integrates:
 
-## Data-fusion model
+- **ESP32** as the central processing unit.
+- **OKY3261/HC-SR04 ultrasonic sensor** for water-level estimation.
+- **BME280** for temperature, relative humidity, and atmospheric pressure.
+- **Mini photovoltaic panel + INA219** for experimental solar-irradiance estimation.
+- **16×2 I²C LCD** for local visualization.
+- **Green, yellow, and red LEDs** for status indication.
+- **Buzzer** for critical audible warnings.
 
-The system computes: (1) reservoir **level (%)** from the measured distance; (2) the **Vapor Pressure Deficit (VPD, kPa)** from temperature and humidity, using the Tetens/FAO-56 saturation-vapor-pressure equation; (3) an **evaporative index (%)**, combining normalized solar radiation and VPD (50%/50%); (4) a **level-drop rate (percentage points per hour)**, comparing successive level readings over time; and (5) an overall **water risk index (%)**, computed as a weighted sum: 50% level deficit + 30% evaporative index + 20% drop-rate index. Independent **safety rules** (hard thresholds on level, evaporative index, and drop rate) guarantee that no single extreme variable is diluted by the weighted average — a deliberate design decision validated experimentally in the test cases described in Section 5.
+All sensing, processing, risk classification, and actuation are performed **locally on the ESP32**.
 
-## Results
-
-Eight test scenarios were designed and independently re-computed in Python (replicating the firmware's exact formulas) to confirm mathematical consistency between the embedded implementation and the documented model. The scenarios successfully exercise all three alert states — 🟢 NORMAL, 🟡 PRECAUCIÓN (caution), 🔴 CRÍTICO (critical) — and all four independent paths that can trigger a critical alert (low level, extreme evaporative conditions, fast level drop, and combined weighted risk), confirming the robustness of the fusion logic.
-
-## Conclusion and future work
-
-The prototype was fully validated in simulation using **Wokwi**, with custom C chips emulating the BME280, INA219, and solar-panel hardware. Planned future work includes migration to physical hardware, field calibration at real reservoir sites in Sabana Centro, IP-rated enclosure design, expanded edge-case and recovery-transition testing, and validation of the alert thresholds against real historical hydrological data for the region.
+Therefore, WREWS does not depend on Wi-Fi, cellular networks, cloud services, or any external communication infrastructure to generate an alert.
 
 ---
-[⬅ Back to index](00-Home.md)
+
+## Data fusion
+
+The water-risk model combines three components:
+
+```text
+Water-level deficit              50 %
+Evaporative conditions           30 %
+Level-decrease trend             20 %
+```
+
+Conceptually:
+
+```text
+WATER LEVEL
+     ↓
+LEVEL DEFICIT ─────────── 50 % ──┐
+                                  │
+TEMPERATURE + HUMIDITY            │
+     ↓                            │
+    VPD                           ├──→ WATER-RISK INDEX
+     +                            │
+ESTIMATED IRRADIANCE              │
+     ↓                            │
+EVAPORATIVE INDEX ─────── 30 % ───┤
+                                  │
+LEVEL OVER TIME                   │
+     ↓                            │
+DECREASE RATE ─────────── 20 % ───┘
+```
+
+The weighted index is complemented by **independent safety rules**, allowing an extreme individual condition to escalate the system state even when the weighted average has not yet reached the critical threshold.
+
+---
+
+## Environmental analysis
+
+Temperature and relative humidity measured by the BME280 are used to calculate **Vapor Pressure Deficit (VPD)**.
+
+VPD provides an indicator of how favorable atmospheric conditions are for evaporation.
+
+The photovoltaic panel and INA219 provide an electrical signal related to the amount of radiation received. This signal is used as an **experimental estimate of solar irradiance**.
+
+VPD and estimated irradiance are then combined into an **evaporative-condition index**.
+
+This index does not represent the actual percentage of water evaporated. Instead, it indicates how favorable the environmental conditions are for evaporation.
+
+Atmospheric pressure is also measured by the BME280 and retained as contextual environmental information, but it is not used as a primary trigger in the water-risk classification.
+
+---
+
+## Level trend
+
+WREWS also analyzes multiple water-level measurements over time.
+
+This makes it possible to estimate the **rate of level decrease** and distinguish between two reservoirs that may currently have the same level but are evolving differently.
+
+For example:
+
+```text
+Reservoir A
+Level: 50 %
+Decrease rate: low
+→ relatively stable
+
+Reservoir B
+Level: 50 %
+Decrease rate: high
+→ water availability is declining rapidly
+```
+
+This trend analysis adds an early-warning component to the system.
+
+---
+
+## Local warning system
+
+After processing the available information, WREWS classifies the situation and activates the corresponding local indicators:
+
+```text
+NORMAL
+→ Green LED
+→ LCD status
+→ Buzzer off
+
+PRECAUTION
+→ Yellow LED
+→ LCD status
+
+CRITICAL
+→ Red LED
+→ LCD status
+→ Audible buzzer warning
+```
+
+The **16×2 I²C LCD** provides local information about the system, while the LEDs make the current state immediately recognizable.
+
+---
+
+## Validation
+
+The development and validation process was divided into two stages.
+
+### Stage 1 — Wokwi simulation
+
+The system was initially developed and tested in Wokwi.
+
+The simulation allowed the team to:
+
+- validate the system architecture;
+- test sensor acquisition;
+- verify I²C communication;
+- evaluate the mathematical processing;
+- reproduce controlled environmental scenarios;
+- validate NORMAL, PRECAUTION, and CRITICAL states;
+- debug the firmware before physical integration.
+
+Custom simulation components were used for some sensors and signals.
+
+### Stage 2 — Physical prototype
+
+After the simulation stage, WREWS was assembled and tested as a **functional physical prototype**.
+
+A movable platform was incorporated into the scale model to represent the water surface.
+
+Changing the platform height modifies the distance measured by the ultrasonic sensor, allowing different reservoir levels to be reproduced safely and repeatedly without exposing the electronics directly to water.
+
+Physical testing confirmed the operation of:
+
+- ultrasonic level sensing;
+- BME280 environmental acquisition;
+- photovoltaic panel and INA219 acquisition;
+- local processing on the ESP32;
+- level-decrease analysis;
+- risk classification;
+- 16×2 I²C LCD;
+- status LEDs;
+- critical buzzer alarm.
+
+The physical implementation therefore validated the complete chain:
+
+```text
+SENSING
+   ↓
+ACQUISITION
+   ↓
+PROCESSING
+   ↓
+DATA FUSION
+   ↓
+RISK CLASSIFICATION
+   ↓
+LOCAL WARNING
+```
+
+---
+
+## Conclusion
+
+WREWS demonstrates how a low-cost IoT system can combine **water level, environmental conditions, and level trend** to provide a more comprehensive assessment of water-scarcity risk.
+
+The final result is a functional physical prototype capable of acquiring multiple variables, processing them locally on an ESP32, and translating the information into three clear warning states.
+
+The project demonstrates the complete transition from **sensing to decision and local actuation**, providing a functional proof of concept for an early water-risk warning system.
+
+---
+
+[⬅ Previous: Team and roles](09-Equipo-Roles.md) · [⬆ Index](00-Home.md)
