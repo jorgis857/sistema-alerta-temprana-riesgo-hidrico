@@ -122,7 +122,7 @@ Finalmente, WREWS clasifica la situación en:
 
 Durante la etapa de diseño se definieron diferentes escenarios en Wokwi para comprobar las rutas de clasificación del algoritmo.
 
-| Caso | Distancia | Temp. | Humedad | Irradiancia | Nivel | VPD | Índice evap. | Tasa descenso | Riesgo | Estado esperado | Estado obtenido |
+| Caso | Distancia | Temp. | Humedad | Irradiancia | Nivel | VPD | Índice evap. | Tasa descenso | Riesgo | Estado esperado |
 |---|---|---|---|---|---|---|---|---|---|---|
 | C1 — Escenario favorable | 4.0 cm | 18.0 °C | 70 % | 300 W/m² | 96.3 % | 0.62 kPa | 25.3 % | 0.0 pp/h | 9.4 % | 🟢 **NORMAL** |
 | C2 — Riesgo combinado | 15.0 cm | 22.0 °C | 55 % | 600 W/m² | 55.6 % | 1.19 kPa | 49.8 % | 1.0 pp/h | 41.2 % | 🟡 **PRECAUCIÓN** |
@@ -185,11 +185,11 @@ Antes de fijar los parámetros de detección de tendencia se caracterizó experi
 
 | Magnitud | Valor medido |
 |---|---|
-| σ de distancia | __ cm |
-| σ de nivel (sobre recorrido de 17 cm) | __ pp |
+| σ de distancia | 0.4 cm |
+| σ de nivel (sobre recorrido de 17 cm) | 2.4 pp |
 | Ventana de estimación | 20 muestras · 20 s |
-| Error típico de la pendiente | __ pp/min |
-| Banda muerta aplicada | __ pp/min |
+| Error típico de la pendiente | 1.8 pp/min |
+| Banda muerta aplicada | 5.5 pp/min |
 
 El error típico de una pendiente ajustada por mínimos cuadrados sobre *n* puntos repartidos en un lapso *T* es `SE = σ·√12 / (T·√n)`. La banda muerta se fijó en tres veces ese valor, lo que sitúa la probabilidad de falso positivo por debajo del 1 %. El procedimiento se ejecuta **automáticamente en cada arranque**, de modo que la banda se adapta al montaje concreto en lugar de depender de un valor elegido a priori.
 
