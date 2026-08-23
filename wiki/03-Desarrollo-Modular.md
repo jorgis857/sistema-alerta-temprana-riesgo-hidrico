@@ -89,20 +89,21 @@ Representa, en una escala relativa, qué tan favorables son las condiciones ambi
 
 ### 3.2.4 Tasa e índice de descenso
 
-La tasa de descenso compara el nivel en diferentes momentos:
+La primera versión del sistema estimaba la tendencia restando dos mediciones consecutivas de nivel. Ese método resultó inviable ya que con el ruido del sensor la tasa superaba por mucho el umbral crítico, incluso con la plataforma quieta.
+
+La versión final estima la pendiente por **regresión lineal por mínimos cuadrados** sobre una ventana de las últimas 20 mediciones. La regresión promedia el ruido de todas las muestras en vez de depender de dos.
 
 ```text
-Tasa de descenso =
-Nivel_anterior - Nivel_actual
------------------------------
-Tiempo transcurrido
+Tasa (pp/min) = − pendiente de la recta ajustada a los pares (tiempo, nivel) de la ventana
 ```
 
-Cuando el nivel aumenta o permanece estable, el descenso se considera nulo.
+Cuando el nivel sube, la pendiente se trunca a cero: una recarga no constituye riesgo hídrico.
 
-La tasa permite detectar situaciones en las que el reservorio pierde disponibilidad rápidamente.
+**Banda muerta.** Por debajo de un umbral derivado del ruido medido del propio sensor, la pendiente se fuerza a cero. Ese umbral se calcula automáticamente en cada arranque (ver Sección 5).
 
----
+**Discontinuidades.** Un reservorio real no cambia de nivel de forma instantánea. Variaciones superiores a 8 puntos porcentuales entre mediciones consecutivas se interpretan como recarga del reservorio —o, en la maqueta, como reposicionamiento manual de la plataforma— y descartan el historial acumulado de tendencia. Sin este tratamiento, la regresión ajustada sobre un escalón produce una pendiente que crece por sí sola mientras el escalón avanza por la ventana.
+
+**Precauciones numéricas.** El eje temporal se expresa relativo a la muestra más antigua de la ventana. Usando el tiempo absoluto del sistema en punto flotante, los términos del denominador de la regresión se aproximan entre sí y su diferencia se pierde por cancelación a los pocos minutos de encendido.
 
 ### 3.2.5 Riesgo hídrico
 
@@ -141,6 +142,24 @@ La implementación utiliza umbrales definidos en el firmware para:
 Estos valores corresponden a parámetros iniciales de diseño y pueden recalibrarse para una instalación real.
 
 ---
+
+### 3.2.7 Umbrales aplicados
+
+| Variable | PRECAUCIÓN | CRÍTICO | Origen del valor |
+|---|---|---|---|
+| Nivel del reservorio | ≤ 40 % | ≤ 15 % | Criterio operativo de diseño | Índice evaporativo | ≥ 60 | ≥ 85 | Criterio operativo de diseño | Tasa de descenso | ≥ 33 pp/min | ≥ 68 pp/min | **Calibración experimental** (Sección 5) | Riesgo ponderado | ≥ 35 | ≥ 70 | Criterio operativo de diseño |
+
+Referencias de normalización: irradiancia 1200 W/m² (pico realista a 2550 m de altitud) y VPD 2.0 kPa. Esta última se fijó a partir del clima local: a 24 °C la presión de vapor de saturación es 2.98 kPa, de modo que 2.0 kPa representa una tarde seca del percentil alto de la región. Una referencia mayor dejaría el índice permanentemente por debajo de sus umbrales.
+
+Los umbrales de tasa corresponden al banco de pruebas, donde la plataforma se desplaza manualmente en segundos. No deben interpretarse como límites hidrológicos de un reservorio real: en campo, con una escala temporal de horas, los valores equivalentes serían del orden de 0.03 y 0.08 pp/min.
+
+### 3.2.8 Escalera de estados y confirmación temporal
+
+Las transiciones se producen de un nivel a la vez, incluso cuando las condiciones instantáneas corresponden a un estado dos escalones por encima. Así PRECAUCIÓN es siempre observable, lo que permite anticipar la escalada y deja el historial completo en el registro.
+
+La confirmación es **asimétrica**: dos ciclos consecutivos para escalar y tres para desescalar. Los costos de los dos errores posibles no son equivalentes: alertar tarde en un evento de desabastecimiento puede impedir la respuesta, mientras que sostener una alerta unos segundos de más no tiene costo operativo.
+
+El estado **FALLO** no participa de la escalera. No es un nivel de riesgo sino una condición del equipo —ausencia de eco del ultrasónico, o del BME280 en el bus I²C— y se entra y se sale de forma directa. Su señalización, los tres LEDs parpadeando a la vez, no se confunde con ningún estado operativo: un sistema de alerta que enmudece cuando pierde un sensor es la peor falla posible.
 
 ## 3.3 Diagramas UML
 
