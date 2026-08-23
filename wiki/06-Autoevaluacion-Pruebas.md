@@ -103,7 +103,9 @@ Aunque el prototipo cumplió los objetivos funcionales del reto, el protocolo pr
 | La irradiancia se obtiene mediante un panel fotovoltaico e INA219 | La lectura funciona como estimación; una medición precisa en W/m² requeriría calibración con un instrumento de referencia |
 | Los umbrales son parámetros iniciales de diseño | Deben ajustarse con datos reales de la región y del reservorio donde se instale el sistema |
 | No se ejecutó una prueba prolongada de operación continua | No se evaluó el comportamiento del sistema durante varios días de funcionamiento |
-| No se cubrieron todos los valores exactos de borde de los umbrales | Podrían realizarse pruebas adicionales específicamente sobre cada límite matemático |
+| No se cubrieron todos los valores exactos de borde de los umbrales | Podrían realizarse pruebas adicionales específicamente sobre cada límite matemático | El extremo lleno del rango (3 cm) cae dentro de la zona ciega del sensor ultrasónico | Por debajo de ~5 cm el transductor sigue resonando por su propio pulso cuando ya retorna el eco. Se observaron lecturas fallidas ocasionales con la plataforma en posición alta | Elevar el sensor de modo que el extremo lleno quede por encima de 10 cm; esto alarga además el recorrido y reduce el peso relativo del ruido |
+| La escala temporal del banco de pruebas difiere en dos órdenes de magnitud de la de campo | Con el ruido y la geometría del montaje, la banda muerta supera ampliamente los umbrales que tendrían sentido en un reservorio real, por lo que ese régimen no es alcanzable con este sensor | Migrar a un transductor de presión sumergible o sensor radar, cuya resolución permite ventanas de estimación de horas |
+| No se caracterizó el consumo energético | El diseño contempla alimentación por panel y batería, pero no se midió el consumo por modo ni se dimensionó la autonomía | Medir consumo en operación y reposo; implementar *deep sleep* con despertar por condición de alarma |
 
 ---
 
