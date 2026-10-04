@@ -1,14 +1,20 @@
 // ============================================================================
 //  WREWS - Water Risk Early Warning System
-//  Firmware del prototipo funcional  ·  v6
+//  Firmware del prototipo funcional  ·  v7
 //  Challenge #2 - Internet de las Cosas - Universidad de La Sabana - 2026-2
+//  v7: tablero de control web en la WLAN (servidor embebido, sesiones,
+//      historial y eventos) y medicion en su propia tarea de FreeRTOS.
 //  v6: el indice evaporativo pasa a ser evaporacion potencial diaria con
 //      Priestley-Taylor (1972) y parametros FAO-56 (Allen et al., 1998).
 // ----------------------------------------------------------------------------
 //  Monitorea el nivel de un reservorio junto con las variables meteorologicas
 //  que gobiernan la evaporacion, fusiona las tres senales en un indice de
-//  riesgo hidrico y emite alerta LOCAL (LCD + LEDs + buzzer) sin depender de
-//  ninguna red de comunicaciones.
+//  riesgo hidrico y emite alerta LOCAL (LCD + LEDs + buzzer) que no depende
+//  de la red. Ademas publica un tablero de control web dentro de la WLAN de
+//  la zona (valor actual, historico, eventos y silencio de la alarma).
+//
+//  ARCHIVOS: wrews.ino (este), tablero.h (paginas web), secrets.h (red y
+//  clave del tablero; no se sube, ver secrets.example.h).
 //
 //  PARAMETROS DEL BANCO DE PRUEBAS
 //  Las constantes de tiempo y las escalas de tasa corresponden a la maqueta
@@ -39,6 +45,19 @@
 #include <Adafruit_BME280.h>
 #include <Adafruit_INA219.h>
 #include <LiquidCrystal_I2C.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
+#include <stdarg.h>
+#include "tablero.h"
+
+// Red y usuario del tablero. secrets.h NO se sube al repositorio: se crea
+// copiando secrets.example.h y llenando los datos del hotspot.
+#if __has_include("secrets.h")
+#include "secrets.h"
+#else
+#error "Falta secrets.h: copie secrets.example.h como secrets.h junto a wrews.ino y complete la red y la clave"
+#endif
 
 // ===========================================================================
 //  PINES Y POLARIDAD
@@ -51,7 +70,6 @@ const uint8_t PIN_LED_V    = 25;
 const uint8_t PIN_LED_A    = 26;
 const uint8_t PIN_LED_R    = 27;
 const uint8_t PIN_BUZZER   = 19;
-const uint8_t PIN_SILENCIO = 23;
 
 #define LED_ON      LOW      // LEDs en anodo comun
 #define LED_OFF     HIGH
@@ -238,8 +256,8 @@ const char *NOMBRE_EST[4] = { "NORMAL", "PRECAUCION", "CRITICO", "FALLO" };
 
 uint8_t estado = EST_NORMAL, estado_silenciado = EST_NORMAL;
 uint8_t conf_contador = 0;
-bool    silenciado = false, boton_previo = HIGH;
-unsigned long t_silencio = 0, t_boton = 0;
+bool    silenciado = false;
+unsigned long t_silencio = 0;
 const unsigned long SILENCIO_MS = 15UL * 60UL * 1000UL;
 
 //                     LED per,  on, BUZ per,  on
@@ -252,8 +270,116 @@ const uint16_t PAT[4][4] = {
 //                       NORMAL  PREC  CRIT  FALLO
 const int BUZ_HZ[4]  = {      0, 1000, 2500,  600 };
 
-unsigned long t_muestra = 0, t_pagina = 0;
+unsigned long t_pagina = 0;
 uint8_t pagina = 0;
+const uint8_t N_PAGINAS = 7;
+unsigned long t_ultima_muestra = 0;    // millis() de la ultima muestra
+
+// ---- Historial reciente (tablero) --------------------------------------
+// Un punto cada HIST_CADA muestras: 300 puntos x 2 s = 10 min de historia,
+// suficiente para ver una maniobra completa del banco de pruebas.
+struct PuntoHist {
+  uint32_t t_s;
+  float nivel, riesgo, evap, tasa, temp, hum, irr;
+  uint8_t estado;
+};
+const uint16_t N_HIST    = 300;
+const uint8_t  HIST_CADA = 2;
+PuntoHist hist[N_HIST];
+uint16_t  hist_n = 0, hist_i = 0;
+uint8_t   hist_cont = 0;
+
+// ---- Eventos (notificaciones del tablero) ------------------------------
+// gravedad: 0 informacion, 1 precaucion, 2 critico / fallo
+struct Evento {
+  uint32_t id, t_ms;
+  uint8_t  gravedad;
+  char     texto[64];
+};
+const uint8_t N_EVENTOS = 24;
+Evento   eventos[N_EVENTOS];
+uint8_t  ev_i = 0;
+uint32_t ev_sig = 1;                   // id del proximo evento (0 = ninguno)
+void registrarEvento(uint8_t gravedad, const char *fmt, ...);
+
+// ---- Red y tablero ------------------------------------------------------
+// Modo estacion (STA): el equipo se une a la WLAN de la Alcaldia (en la
+// demo, el hotspot de un celular) y sirve el tablero dentro de ella.
+const char *NOMBRE_HOST = "wrews";     // http://wrews.local en PC
+const unsigned long WIFI_ESPERA_MS     = 15000;  // espera inicial en setup
+const unsigned long WIFI_REINTENTO_MS  = 10000;  // reintento si se cae
+WebServer servidor(80);
+bool      wifi_ok = false;             // solo se usan desde loop()
+char      ip_txt[16] = "0.0.0.0";
+unsigned long t_reintento_wifi = 0;
+uint16_t  reconexiones_wifi = 0;
+bool      mdns_ok = false;
+
+// Sesiones del tablero: token aleatorio en una cookie HttpOnly.
+struct Sesion { char token[33]; unsigned long t_ms; bool activa; };
+const uint8_t N_SESIONES = 4;
+const unsigned long SESION_MS = 12UL * 3600UL * 1000UL;   // 12 h
+Sesion sesiones[N_SESIONES];
+uint8_t fallos_login = 0;
+unsigned long t_bloqueo_login = 0;
+const uint8_t MAX_FALLOS_LOGIN = 5;
+const unsigned long BLOQUEO_LOGIN_MS = 30000;
+
+// ---- Concurrencia -------------------------------------------------------
+// Tres hilos (requisito del Challenge 2: medir fuera del hilo principal):
+//   tareaMedicion  nucleo 0  sensores, modelo, estado, historial
+//   tareaAlarmas   nucleo 1  LEDs y buzzer cada 10 ms
+//   loop()         nucleo 1  servidor web, Wi-Fi y LCD
+// Las alarmas van aparte del servidor a proposito: un cliente lento o una
+// caida de la WLAN no pueden congelar la alarma fisica.
+//   mtx_estado protege TODAS las variables de estado de arriba (menos las
+//              de red y sesiones, que solo toca loop()).
+//   mtx_i2c    protege el bus I2C (LCD, BME280 e INA219 lo comparten).
+// Orden fijo para no bloquearse: nunca tomar mtx_i2c teniendo mtx_estado.
+// Ninguna ISR: el I2C y la coma flotante no deben ir dentro de una ISR.
+SemaphoreHandle_t mtx_estado = NULL, mtx_i2c = NULL;
+TaskHandle_t      tarea_medicion = NULL, tarea_alarmas = NULL;
+const uint32_t    PILA_MEDICION  = 8192;   // printf con floats usa varios kB
+const uint32_t    PILA_ALARMAS   = 4096;
+const UBaseType_t PRIO_MEDICION  = 2;      // por encima de loop() (1)
+const UBaseType_t PRIO_ALARMAS   = 2;
+const BaseType_t  NUCLEO_MEDICION = 0, NUCLEO_ALARMAS = 1;
+
+void bloquear(SemaphoreHandle_t m) { xSemaphoreTake(m, portMAX_DELAY); }
+void liberar(SemaphoreHandle_t m)  { xSemaphoreGive(m); }
+
+// Agrega un evento al registro circular que lee el tablero y lo repite por
+// el monitor serial. Se llama con mtx_estado tomado.
+void registrarEvento(uint8_t gravedad, const char *fmt, ...) {
+  Evento &e = eventos[ev_i];
+  e.id = ev_sig++;
+  e.t_ms = millis();
+  e.gravedad = gravedad;
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(e.texto, sizeof(e.texto), fmt, ap);
+  va_end(ap);
+  ev_i = (ev_i + 1) % N_EVENTOS;
+  Serial.printf(">>> [%lu] %s\n", (unsigned long)e.id, e.texto);
+}
+
+// Un punto de historia cada HIST_CADA muestras. Se llama con mtx_estado tomado.
+void guardarHistorial() {
+  if (++hist_cont < HIST_CADA) return;
+  hist_cont = 0;
+  PuntoHist &h = hist[hist_i];
+  h.t_s    = millis() / 1000;
+  h.nivel  = nivel_pct;
+  h.riesgo = riesgo;
+  h.evap   = idx_evap;
+  h.tasa   = tasa_ppm;
+  h.temp   = temp_c;
+  h.hum    = hum_pct;
+  h.irr    = irradiancia;
+  h.estado = estado;
+  hist_i = (hist_i + 1) % N_HIST;
+  if (hist_n < N_HIST) hist_n++;
+}
 
 // ===========================================================================
 //  SENSORES
@@ -485,8 +611,36 @@ void caracterizarRuido() {
 // ===========================================================================
 //  MUESTREO Y MODELO
 // ===========================================================================
+// Corre en la tarea de medicion. Las lecturas, que son lentas (el HC-SR04
+// tarda ~100 ms), se hacen SIN el candado del estado para no frenar las
+// alarmas; el candado se toma solo para actualizar las variables compartidas.
 void tomarMuestra() {
-  distancia_cm = leerDistancia();
+  float d = leerDistancia();
+
+  float t = NAN, h = NAN, p = NAN, i_ma = NAN;
+  if (hay_bme || hay_ina) {
+    bloquear(mtx_i2c);
+    if (hay_bme) {
+      t = bme.readTemperature();
+      h = bme.readHumidity();
+      p = bme.readPressure() / 100.0;
+    }
+    if (hay_ina) i_ma = ina.getCurrent_mA();
+    liberar(mtx_i2c);
+  }
+
+  bloquear(mtx_estado);
+  actualizarModelo(d, t, h, p, i_ma);
+  aplicarEstado(calcularObjetivo());
+  imprimirSerial();
+  guardarHistorial();
+  liberar(mtx_estado);
+}
+
+// Todo lo que sigue escribe estado compartido: se llama con mtx_estado tomado.
+void actualizarModelo(float d, float t, float h, float p, float i_ma) {
+  t_ultima_muestra = millis();
+  distancia_cm = d;
   ultra_ok = (distancia_cm > 0 && distancia_cm < 400);
 
   if (ultra_ok) {
@@ -516,14 +670,14 @@ void tomarMuestra() {
   if (tasa_ppm > tasa_max) tasa_max = tasa_ppm;
 
   if (hay_bme) {
-    temp_c   = bme.readTemperature();
-    hum_pct  = bme.readHumidity();
-    pres_hpa = bme.readPressure() / 100.0;
+    temp_c   = t;
+    hum_pct  = h;
+    pres_hpa = p;
     vpd_kpa  = calcVPD(temp_c, hum_pct);
   } else temp_c = hum_pct = pres_hpa = vpd_kpa = NAN;
 
   if (hay_ina) {
-    corriente_ma = ina.getCurrent_mA() - OFFSET_PANEL_MA;
+    corriente_ma = i_ma - OFFSET_PANEL_MA;
     irradiancia  = K_PANEL_WM2_POR_MA * corriente_ma;
     if (irradiancia < 0) irradiancia = 0;
   } else { corriente_ma = NAN; irradiancia = 0; }
@@ -607,9 +761,13 @@ void aplicarEstado(uint8_t objetivo) {
          : (objetivo > estado ? estado + 1 : estado - 1);
   conf_contador = 0;
 
-  if (silenciado && estado > estado_silenciado) silenciado = false;
-  Serial.printf(">>> ESTADO -> %-11s (N%u E%u T%u R%u)\n",
-                NOMBRE_EST[estado], s_nivel, s_evap, s_tasa, s_riesgo);
+  registrarEvento(estado == EST_NORMAL ? 0 : (estado == EST_PRECAUCION ? 1 : 2),
+                  "Estado %s (nivel %u, evap %u, tasa %u, riesgo %u)",
+                  NOMBRE_EST[estado], s_nivel, s_evap, s_tasa, s_riesgo);
+  if (silenciado && estado > estado_silenciado) {
+    silenciado = false;
+    registrarEvento(1, "Silencio cancelado: el estado empeoro");
+  }
 }
 
 // ===========================================================================
@@ -620,8 +778,8 @@ bool enFase(unsigned long t, uint16_t per, uint16_t on) {
   return (t % per) < on;
 }
 
-void buzzerOn()  { ledcWriteTone(PIN_BUZZER, BUZ_HZ[estado]); }
-void buzzerOff() { ledcWrite(PIN_BUZZER, 0); }
+void buzzerOn(uint8_t est) { ledcWriteTone(PIN_BUZZER, BUZ_HZ[est]); }
+void buzzerOff()           { ledcWrite(PIN_BUZZER, 0); }
 
 void apagarLeds() {
   digitalWrite(PIN_LED_V, LED_OFF);
@@ -629,43 +787,67 @@ void apagarLeds() {
   digitalWrite(PIN_LED_R, LED_OFF);
 }
 
+// El silencio afecta SOLO al buzzer: los LEDs siguen igual, porque la
+// condicion peligrosa no desaparecio porque alguien la reconociera.
+// No hay boton fisico: lo dispara el tablero web. Se llama con mtx_estado tomado.
+// Devuelve false si no habia nada que silenciar.
+bool silenciarAlarma(const char *origen) {
+  if (silenciado || estado == EST_NORMAL) return false;
+  silenciado = true; estado_silenciado = estado; t_silencio = millis();
+  registrarEvento(0, "Buzzer silenciado 15 min desde %s", origen);
+  return true;
+}
+
+// Corre en tareaAlarmas (nucleo 1): toma una copia del estado bajo el
+// candado y maneja los pines sin el.
 void actualizarAlarmas() {
   unsigned long ahora = millis();
 
-  // El silencio afecta SOLO al buzzer: los LEDs siguen igual, porque la
-  // condicion peligrosa no desaparecio porque alguien la reconociera.
-  bool b = digitalRead(PIN_SILENCIO);
-  if (b == LOW && boton_previo == HIGH && ahora - t_boton > 250) {
-    t_boton = ahora;
-    if (!silenciado) {
-      silenciado = true; estado_silenciado = estado; t_silencio = ahora;
-      Serial.println(F(">>> Silenciado 15 min (los LEDs siguen igual)"));
-    }
+  bloquear(mtx_estado);
+  if (silenciado && ahora - t_silencio > SILENCIO_MS) {
+    silenciado = false;
+    registrarEvento(0, "Fin del silencio de 15 min");
   }
-  boton_previo = b;
-  if (silenciado && ahora - t_silencio > SILENCIO_MS) silenciado = false;
+  uint8_t est  = estado;
+  bool    mute = silenciado;
+  liberar(mtx_estado);
 
-  bool led_on = enFase(ahora, PAT[estado][0], PAT[estado][1]);
+  bool led_on = enFase(ahora, PAT[est][0], PAT[est][1]);
   apagarLeds();
-  if      (estado == EST_NORMAL)     digitalWrite(PIN_LED_V, LED_ON);
-  else if (estado == EST_PRECAUCION) digitalWrite(PIN_LED_A, LED_ON);
-  else if (estado == EST_CRITICO)  { if (led_on) digitalWrite(PIN_LED_R, LED_ON); }
+  if      (est == EST_NORMAL)     digitalWrite(PIN_LED_V, LED_ON);
+  else if (est == EST_PRECAUCION) digitalWrite(PIN_LED_A, LED_ON);
+  else if (est == EST_CRITICO)  { if (led_on) digitalWrite(PIN_LED_R, LED_ON); }
   else if (led_on) {                                  // FALLO: los tres
     digitalWrite(PIN_LED_V, LED_ON);
     digitalWrite(PIN_LED_A, LED_ON);
     digitalWrite(PIN_LED_R, LED_ON);
   }
 
-  bool sonar = !silenciado && enFase(ahora, PAT[estado][2], PAT[estado][3]);
-  if (sonar) buzzerOn(); else buzzerOff();
+  bool sonar = !mute && enFase(ahora, PAT[est][2], PAT[est][3]);
+  if (sonar) buzzerOn(est); else buzzerOff();
 }
 
 // ===========================================================================
 //  SALIDA
 // ===========================================================================
+// El texto se arma con el candado del estado y se escribe con el del bus
+// I2C: el LCD comparte bus con el BME280 y el INA219, que lee la otra tarea.
 void mostrarPagina(uint8_t p) {
   if (!hay_lcd) return;
   char l1[17], l2[17];
+
+  bloquear(mtx_estado);
+  armarPagina(p, l1, l2);
+  liberar(mtx_estado);
+
+  bloquear(mtx_i2c);
+  lcd->clear();
+  lcd->setCursor(0,0); lcd->print(l1);
+  lcd->setCursor(0,1); lcd->print(l2);
+  liberar(mtx_i2c);
+}
+
+void armarPagina(uint8_t p, char *l1, char *l2) {
 
   switch (p) {
     case 0:
@@ -704,10 +886,12 @@ void mostrarPagina(uint8_t p) {
       if (buf_n < MIN_MUESTRAS) snprintf(l2, 17, "Tasa: midiendo");
       else                      snprintf(l2, 17, "Tasa:%6.1f pp/m", tasa_ppm);
       break;
+    case 6:
+      // Direccion del tablero: Android no resuelve wrews.local, la IP si
+      snprintf(l1, 17, "WiFi: %s", wifi_ok ? "conectado" : "sin red");
+      snprintf(l2, 17, "%s", wifi_ok ? ip_txt : WIFI_SSID);
+      break;
   }
-  lcd->clear();
-  lcd->setCursor(0,0); lcd->print(l1);
-  lcd->setCursor(0,1); lcd->print(l2);
 }
 
 void imprimirSerial() {
@@ -723,6 +907,393 @@ void imprimirSerial() {
                 tasa_ppm, tasa_max, riesgo,
                 s_nivel, s_evap, s_tasa, s_riesgo,
                 NOMBRE_EST[estado], silenciado ? " [MUTE]" : "");
+}
+
+// ===========================================================================
+//  RED: WI-FI EN MODO ESTACION
+//  El equipo se une a la WLAN de la Alcaldia (hotspot del celular en la
+//  demo). Si la red se cae, la medicion y la alarma fisica siguen igual:
+//  corren en sus propias tareas y no dependen de la red.
+// ===========================================================================
+
+// Corre en la tarea de eventos del Wi-Fi, no en una ISR: puede tomar el candado.
+void eventoWiFi(WiFiEvent_t ev, WiFiEventInfo_t info) {
+  static bool estaba_conectado = false;
+  if (ev == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
+    IPAddress ip(info.got_ip.ip_info.ip.addr);
+    bloquear(mtx_estado);
+    registrarEvento(0, "Wi-Fi conectado, tablero en http://%s",
+                    ip.toString().c_str());
+    liberar(mtx_estado);
+    estaba_conectado = true;
+  } else if (ev == ARDUINO_EVENT_WIFI_STA_DISCONNECTED && estaba_conectado) {
+    // Solo la primera desconexion: los reintentos fallidos no son eventos nuevos
+    bloquear(mtx_estado);
+    registrarEvento(1, "Wi-Fi perdido (motivo %u); la alarma local sigue activa",
+                    info.wifi_sta_disconnected.reason);
+    liberar(mtx_estado);
+    estaba_conectado = false;
+  }
+}
+
+void iniciarWiFi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(NOMBRE_HOST);
+  WiFi.setAutoReconnect(true);
+  WiFi.onEvent(eventoWiFi);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.printf("Wi-Fi: conectando a \"%s\"", WIFI_SSID);
+
+  // Espera acotada: sin red el equipo arranca igual y reintenta desde loop()
+  unsigned long t0 = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_ESPERA_MS) {
+    delay(500);
+    Serial.print('.');
+  }
+  Serial.println();
+  t_reintento_wifi = millis();
+  vigilarWiFi();
+  if (!wifi_ok)
+    Serial.println(F("Wi-Fi: sin conexion; se sigue intentando cada 10 s"));
+}
+
+// Corre en loop(). Mantiene wifi_ok / ip_txt y reintenta si la red se cayo.
+void vigilarWiFi() {
+  bool ahora_ok = (WiFi.status() == WL_CONNECTED);
+
+  if (ahora_ok && !wifi_ok) {
+    snprintf(ip_txt, sizeof(ip_txt), "%s", WiFi.localIP().toString().c_str());
+    Serial.printf("Wi-Fi: conectado, IP %s, RSSI %d dBm\n", ip_txt, WiFi.RSSI());
+    if (!mdns_ok && MDNS.begin(NOMBRE_HOST)) {
+      MDNS.addService("http", "tcp", 80);
+      mdns_ok = true;
+    }
+  }
+  if (!ahora_ok && wifi_ok) reconexiones_wifi++;
+  wifi_ok = ahora_ok;
+
+  // El reconectado automatico del ESP32 a veces se rinde: reintento propio
+  if (!wifi_ok && millis() - t_reintento_wifi > WIFI_REINTENTO_MS) {
+    t_reintento_wifi = millis();
+    WiFi.disconnect();
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+  }
+}
+
+// ===========================================================================
+//  TABLERO: ACCESO
+//  Dos condiciones, las dos obligatorias:
+//  1. El cliente esta en la MISMA subred que el equipo (la WLAN de la zona).
+//  2. Tiene una sesion abierta con usuario y clave (cookie HttpOnly con un
+//     token aleatorio de 128 bits, valido 12 h).
+//  Limitacion declarada: el tablero va por HTTP, sin TLS. La clave viaja una
+//  sola vez (al iniciar sesion) y protegida solo por el cifrado WPA2 de la WLAN.
+// ===========================================================================
+bool mismaSubred() {
+  IPAddress c = servidor.client().remoteIP();
+  IPAddress l = WiFi.localIP(), m = WiFi.subnetMask();
+  for (uint8_t i = 0; i < 4; i++)
+    if ((c[i] & m[i]) != (l[i] & m[i])) return false;
+  return true;
+}
+
+// Token de la cookie "wrews", o "" si no viene
+String tokenCookie() {
+  String ck = servidor.header("Cookie");
+  int i = ck.indexOf("wrews=");
+  if (i < 0) return "";
+  return ck.substring(i + 6, i + 6 + 32);
+}
+
+bool autorizado() {
+  if (!mismaSubred()) return false;
+  String tk = tokenCookie();
+  if (tk.length() != 32) return false;
+  for (uint8_t k = 0; k < N_SESIONES; k++) {
+    Sesion &s = sesiones[k];
+    if (!s.activa) continue;
+    if (millis() - s.t_ms > SESION_MS) { s.activa = false; continue; }
+    if (tk.equals(s.token)) return true;
+  }
+  return false;
+}
+
+// Abre una sesion nueva (reemplaza la mas vieja si estan todas ocupadas)
+const char *abrirSesion() {
+  uint8_t k_libre = 0;
+  unsigned long mas_vieja = 0;
+  for (uint8_t k = 0; k < N_SESIONES; k++) {
+    if (!sesiones[k].activa) { k_libre = k; break; }
+    unsigned long edad = millis() - sesiones[k].t_ms;
+    if (edad >= mas_vieja) { mas_vieja = edad; k_libre = k; }
+  }
+  Sesion &s = sesiones[k_libre];
+  for (uint8_t b = 0; b < 16; b++)
+    snprintf(s.token + 2*b, 3, "%02x", (uint8_t)(esp_random() & 0xFF));
+  s.t_ms = millis();
+  s.activa = true;
+  return s.token;
+}
+
+void cerrarSesion() {
+  String tk = tokenCookie();
+  for (uint8_t k = 0; k < N_SESIONES; k++)
+    if (sesiones[k].activa && tk.equals(sesiones[k].token)) sesiones[k].activa = false;
+}
+
+void redirigir(const char *a) {
+  servidor.sendHeader("Location", a);
+  servidor.send(303, "text/plain", "");
+}
+
+void responderNoAutorizado() {
+  if (!mismaSubred()) servidor.send(403, "application/json", "{\"error\":\"fuera de la WLAN\"}");
+  else                servidor.send(401, "application/json", "{\"error\":\"sesion requerida\"}");
+}
+
+// ===========================================================================
+//  TABLERO: JSON
+//  Sin librerias externas. NaN e infinito salen como null (JSON valido).
+// ===========================================================================
+void jsonNum(String &s, const char *k, float v, uint8_t dec) {
+  s += '"'; s += k; s += "\":";
+  if (isnan(v) || isinf(v)) s += "null"; else s += String(v, (unsigned int)dec);
+  s += ',';
+}
+void jsonEnt(String &s, const char *k, long v) {
+  s += '"'; s += k; s += "\":"; s += v; s += ',';
+}
+void jsonTxt(String &s, const char *k, const char *v) {
+  s += '"'; s += k; s += "\":\"";
+  for (const char *c = v; *c; c++) { if (*c == '"' || *c == '\\') s += '\\'; s += *c; }
+  s += "\",";
+}
+void jsonCerrar(String &s, char cierre) {
+  if (s.endsWith(",")) s.setCharAt(s.length() - 1, cierre); else s += cierre;
+}
+
+// Escribe un float en buf como numero JSON o null
+void numTxt(char *buf, size_t n, float v, uint8_t dec) {
+  if (isnan(v) || isinf(v)) snprintf(buf, n, "null");
+  else snprintf(buf, n, "%.*f", dec, v);
+}
+
+// GET /api/actual: valor actual de todo. El JSON se arma bajo el candado
+// (es rapido) y se envia sin el.
+void apiActual() {
+  if (!autorizado()) { responderNoAutorizado(); return; }
+  String s;
+  s.reserve(1400);
+  s = "{";
+  unsigned long ahora = millis();
+  bloquear(mtx_estado);
+  jsonEnt(s, "t_ms", ahora);
+  jsonEnt(s, "t_muestra_ms", t_ultima_muestra);
+  jsonTxt(s, "estado", NOMBRE_EST[estado]);
+  jsonEnt(s, "estado_n", estado);
+  jsonEnt(s, "silenciado", silenciado ? 1 : 0);
+  jsonEnt(s, "silencio_rest_s",
+          silenciado ? (long)((SILENCIO_MS - (ahora - t_silencio)) / 1000) : 0);
+  jsonEnt(s, "sev_nivel", s_nivel);
+  jsonEnt(s, "sev_evap", s_evap);
+  jsonEnt(s, "sev_tasa", s_tasa);
+  jsonEnt(s, "sev_riesgo", s_riesgo);
+  jsonNum(s, "nivel_pct", nivel_pct, 1);
+  jsonNum(s, "distancia_cm", distancia_cm, 1);
+  jsonEnt(s, "ultra_ok", ultra_ok ? 1 : 0);
+  jsonNum(s, "tasa_ppm", tasa_ppm, 1);
+  jsonNum(s, "tasa_max", tasa_max, 1);
+  jsonEnt(s, "tasa_lista", buf_n >= MIN_MUESTRAS ? 1 : 0);
+  jsonNum(s, "riesgo", riesgo, 1);
+  jsonNum(s, "temp_c", temp_c, 1);
+  jsonNum(s, "hum_pct", hum_pct, 1);
+  jsonNum(s, "pres_hpa", pres_hpa, 1);
+  jsonNum(s, "vpd_kpa", vpd_kpa, 2);
+  jsonNum(s, "rs_wm2", irradiancia, 0);
+  jsonNum(s, "rs_dia_mj", pt.rs_dia_mj, 2);
+  jsonNum(s, "rn_mj", pt.rn_mj, 2);
+  jsonNum(s, "delta", pt.delta, 4);
+  jsonNum(s, "gamma", pt.gamma, 4);
+  jsonNum(s, "frac_pt", pt.frac_pt, 3);
+  jsonNum(s, "ea_kpa", pt.ea_kpa, 3);
+  jsonNum(s, "et_mm_dia", pt.et_mm_dia, 2);
+  jsonNum(s, "idx_evap", idx_evap, 1);
+  jsonNum(s, "cobertura_ventana", cobertura_ventana, 2);
+  jsonTxt(s, "estado_evap", NOMBRE_EVAP[estado_evap]);
+  jsonTxt(s, "modo", MODO_DEMO ? "DEMO" : "CAMPO");
+  jsonEnt(s, "ultimo_evento", ev_sig - 1);
+  liberar(mtx_estado);
+  jsonEnt(s, "rssi", WiFi.RSSI());
+  jsonEnt(s, "reconexiones_wifi", reconexiones_wifi);
+  jsonCerrar(s, '}');
+  servidor.sendHeader("Cache-Control", "no-store");
+  servidor.send(200, "application/json", s);
+}
+
+// GET /api/config: constantes del modelo, para dibujar umbrales y textos
+void apiConfig() {
+  if (!autorizado()) { responderNoAutorizado(); return; }
+  String s = "{";
+  jsonNum(s, "u_prec_nivel", U_PREC_NIVEL, 1);
+  jsonNum(s, "u_crit_nivel", U_CRIT_NIVEL, 1);
+  jsonNum(s, "u_prec_riesgo", U_PREC_RIESGO, 1);
+  jsonNum(s, "u_crit_riesgo", U_CRIT_RIESGO, 1);
+  jsonNum(s, "u_prec_evap", U_PREC_EVAP, 1);
+  jsonNum(s, "u_crit_evap", U_CRIT_EVAP, 1);
+  jsonNum(s, "u_prec_tasa", U_PREC_TASA, 1);
+  jsonNum(s, "u_crit_tasa", U_CRIT_TASA, 1);
+  jsonNum(s, "w_nivel", W_NIVEL, 2);
+  jsonNum(s, "w_evap", W_EVAP, 2);
+  jsonNum(s, "w_tasa", W_TASA, 2);
+  jsonNum(s, "et_ref", ET_REF_MM_DIA, 1);
+  jsonTxt(s, "modo", MODO_DEMO ? "DEMO" : "CAMPO");
+  jsonEnt(s, "ventana_s", ventana_evap.duracion_s);
+  jsonEnt(s, "hist_cada_s", HIST_CADA * T_MUESTREO_MS / 1000);
+  jsonTxt(s, "red", WIFI_SSID);
+  jsonCerrar(s, '}');
+  servidor.send(200, "application/json", s);
+}
+
+// GET /api/historial: [[t_s, nivel, riesgo, evap, tasa, temp, hum, irr, estado], ...]
+// Se copia bajo el candado y se envia por partes sin el: un cliente lento no
+// debe frenar la medicion.
+void apiHistorial() {
+  if (!autorizado()) { responderNoAutorizado(); return; }
+  static PuntoHist copia[N_HIST];      // static: 10 kB fuera de la pila
+  bloquear(mtx_estado);
+  uint16_t n = hist_n;
+  uint16_t inicio = (hist_i + N_HIST - n) % N_HIST;
+  for (uint16_t k = 0; k < n; k++) copia[k] = hist[(inicio + k) % N_HIST];
+  liberar(mtx_estado);
+
+  servidor.sendHeader("Cache-Control", "no-store");
+  servidor.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  servidor.send(200, "application/json", "");
+  String bloque;
+  bloque.reserve(1600);
+  bloque = "[";
+  char a[12], b[12], c[12], d[12], e[12], f[12], g[12];
+  for (uint16_t k = 0; k < n; k++) {
+    const PuntoHist &h = copia[k];
+    numTxt(a, sizeof(a), h.nivel, 1);  numTxt(b, sizeof(b), h.riesgo, 1);
+    numTxt(c, sizeof(c), h.evap, 1);   numTxt(d, sizeof(d), h.tasa, 1);
+    numTxt(e, sizeof(e), h.temp, 1);   numTxt(f, sizeof(f), h.hum, 1);
+    numTxt(g, sizeof(g), h.irr, 0);
+    char linea[110];
+    snprintf(linea, sizeof(linea), "%s[%lu,%s,%s,%s,%s,%s,%s,%s,%u]",
+             k ? "," : "", (unsigned long)h.t_s, a, b, c, d, e, f, g, h.estado);
+    bloque += linea;
+    if (bloque.length() > 1400) { servidor.sendContent(bloque); bloque = ""; }
+  }
+  bloque += "]";
+  servidor.sendContent(bloque);
+  servidor.sendContent("");
+}
+
+// GET /api/eventos?desde=N: eventos con id > N, del mas viejo al mas nuevo
+void apiEventos() {
+  if (!autorizado()) { responderNoAutorizado(); return; }
+  uint32_t desde = servidor.hasArg("desde") ? servidor.arg("desde").toInt() : 0;
+  String s;
+  s.reserve(2400);
+  s = "{";
+  bloquear(mtx_estado);
+  jsonEnt(s, "t_ms", millis());
+  s += "\"eventos\":[";
+  for (uint8_t k = 0; k < N_EVENTOS; k++) {
+    const Evento &e = eventos[(ev_i + k) % N_EVENTOS];   // del mas viejo
+    if (e.id == 0 || e.id <= desde) continue;
+    s += '{';
+    jsonEnt(s, "id", e.id);
+    jsonEnt(s, "t_ms", e.t_ms);
+    jsonEnt(s, "gravedad", e.gravedad);
+    jsonTxt(s, "texto", e.texto);
+    jsonCerrar(s, '}');
+    s += ',';
+  }
+  liberar(mtx_estado);
+  jsonCerrar(s, ']');
+  s += '}';
+  servidor.sendHeader("Cache-Control", "no-store");
+  servidor.send(200, "application/json", s);
+}
+
+// POST /api/silenciar: lo mismo que haria un boton de silencio en el equipo
+void apiSilenciar() {
+  if (!autorizado()) { responderNoAutorizado(); return; }
+  char origen[40];
+  snprintf(origen, sizeof(origen), "el tablero (%s)",
+           servidor.client().remoteIP().toString().c_str());
+  bloquear(mtx_estado);
+  bool hecho = silenciarAlarma(origen);
+  liberar(mtx_estado);
+  servidor.send(200, "application/json",
+                hecho ? "{\"ok\":1}" : "{\"ok\":0,\"motivo\":\"nada que silenciar\"}");
+}
+
+// ===========================================================================
+//  TABLERO: PAGINAS Y RUTAS
+// ===========================================================================
+void paginaTablero() {
+  if (!mismaSubred()) { responderNoAutorizado(); return; }
+  if (!autorizado())  { redirigir("/login"); return; }
+  servidor.sendHeader("Cache-Control", "no-store");
+  servidor.send_P(200, "text/html; charset=utf-8", TABLERO_HTML);
+}
+
+void paginaLogin() {
+  if (!mismaSubred()) { responderNoAutorizado(); return; }
+  servidor.send_P(200, "text/html; charset=utf-8", LOGIN_HTML);
+}
+
+// Tras MAX_FALLOS_LOGIN claves malas seguidas, el login se bloquea 30 s
+void procesarLogin() {
+  if (!mismaSubred()) { responderNoAutorizado(); return; }
+  if (fallos_login >= MAX_FALLOS_LOGIN) {
+    if (millis() - t_bloqueo_login < BLOQUEO_LOGIN_MS) { redirigir("/login?b=1"); return; }
+    fallos_login = 0;
+  }
+  String ip = servidor.client().remoteIP().toString();
+  if (servidor.arg("u") == WEB_USER && servidor.arg("p") == WEB_PASS) {
+    fallos_login = 0;
+    String ck = String("wrews=") + abrirSesion() + "; Path=/; HttpOnly; SameSite=Strict";
+    servidor.sendHeader("Set-Cookie", ck);
+    bloquear(mtx_estado);
+    registrarEvento(0, "Sesion iniciada desde %s", ip.c_str());
+    liberar(mtx_estado);
+    redirigir("/");
+  } else {
+    if (++fallos_login >= MAX_FALLOS_LOGIN) t_bloqueo_login = millis();
+    bloquear(mtx_estado);
+    registrarEvento(1, "Clave incorrecta desde %s (%u/%u)",
+                    ip.c_str(), fallos_login, MAX_FALLOS_LOGIN);
+    liberar(mtx_estado);
+    redirigir(fallos_login >= MAX_FALLOS_LOGIN ? "/login?b=1" : "/login?e=1");
+  }
+}
+
+void procesarLogout() {
+  cerrarSesion();
+  servidor.sendHeader("Set-Cookie", "wrews=; Path=/; Max-Age=0");
+  redirigir("/login");
+}
+
+void iniciarServidor() {
+  const char *cabeceras[] = { "Cookie" };
+  servidor.collectHeaders(cabeceras, 1);
+
+  servidor.on("/",              HTTP_GET,  paginaTablero);
+  servidor.on("/login",         HTTP_GET,  paginaLogin);
+  servidor.on("/login",         HTTP_POST, procesarLogin);
+  servidor.on("/logout",        HTTP_POST, procesarLogout);
+  servidor.on("/api/actual",    HTTP_GET,  apiActual);
+  servidor.on("/api/config",    HTTP_GET,  apiConfig);
+  servidor.on("/api/historial", HTTP_GET,  apiHistorial);
+  servidor.on("/api/eventos",   HTTP_GET,  apiEventos);
+  servidor.on("/api/silenciar", HTTP_POST, apiSilenciar);
+  servidor.onNotFound([]() { servidor.send(404, "text/plain", "No existe"); });
+  servidor.begin();
+  Serial.println(F("Servidor web en el puerto 80"));
 }
 
 // ===========================================================================
@@ -821,12 +1392,18 @@ bool autotestPT() {
 void setup() {
   Serial.begin(115200);
   delay(400);
-  Serial.println(F("\n\n===== WREWS v6 - prototipo funcional =====\n"));
+  Serial.println(F("\n\n===== WREWS v7 - prototipo funcional =====\n"));
+
+  mtx_estado = xSemaphoreCreateMutex();
+  mtx_i2c    = xSemaphoreCreateMutex();
+  if (!mtx_estado || !mtx_i2c) {
+    Serial.println(F("Sin memoria para los mutex: el equipo no puede arrancar."));
+    while (true) delay(1000);
+  }
 
   // Estado seguro inmediato: pinMode() deja el pin en LOW y con polaridad
   // invertida eso significaria "encendido".
   pinMode(PIN_LED_V, OUTPUT); pinMode(PIN_LED_A, OUTPUT); pinMode(PIN_LED_R, OUTPUT);
-  pinMode(PIN_SILENCIO, INPUT_PULLUP);
   ledcAttach(PIN_BUZZER, BUZZER_HZ, 8);
   ledcWrite(PIN_BUZZER, 0);
   apagarLeds();
@@ -842,7 +1419,7 @@ void setup() {
   if (addr_lcd) {
     lcd = new LiquidCrystal_I2C(addr_lcd, 16, 2);
     lcd->init(); lcd->backlight();
-    lcd->setCursor(0,0); lcd->print("WREWS v6");
+    lcd->setCursor(0,0); lcd->print("WREWS v7");
     lcd->setCursor(0,1); lcd->print("Iniciando...");
     hay_lcd = true;
     Serial.printf("LCD  ..... OK en 0x%02X\n", addr_lcd);
@@ -898,22 +1475,67 @@ void setup() {
 
   tomarMuestra();
   mostrarPagina(0);
-  t_muestra = t_pagina = millis();
+  t_pagina = millis();
+
+  BaseType_t ok_m = xTaskCreatePinnedToCore(tareaMedicion, "medicion",
+                                            PILA_MEDICION, NULL, PRIO_MEDICION,
+                                            &tarea_medicion, NUCLEO_MEDICION);
+  BaseType_t ok_a = xTaskCreatePinnedToCore(tareaAlarmas, "alarmas",
+                                            PILA_ALARMAS, NULL, PRIO_ALARMAS,
+                                            &tarea_alarmas, NUCLEO_ALARMAS);
+  if (ok_m != pdPASS || ok_a != pdPASS) {
+    Serial.println(F("No se pudieron crear las tareas: el equipo no puede operar."));
+    while (true) delay(1000);
+  }
+  Serial.printf("Tarea de medicion en el nucleo %d, cada %lu ms\n",
+                NUCLEO_MEDICION, T_MUESTREO_MS);
+  Serial.printf("Tarea de alarmas en el nucleo %d\n", NUCLEO_ALARMAS);
+
+  // La red va despues de las tareas: mientras se conecta, el equipo ya mide
+  // y alarma. Sin red arranca igual.
+  iniciarWiFi();
+  iniciarServidor();
+  if (wifi_ok)
+    Serial.printf("Tablero: http://%s  (o http://%s.local desde un PC)\n\n",
+                  ip_txt, NOMBRE_HOST);
 }
 
-void loop() {
-  unsigned long ahora = millis();
-
-  if (ahora - t_muestra >= T_MUESTREO_MS) {
-    t_muestra = ahora;
+// ---------------------------------------------------------------------------
+//  TAREA DE MEDICION (nucleo 0)
+//  vTaskDelayUntil mantiene el periodo fijo aunque una muestra tarde mas o
+//  menos, y entre muestra y muestra la tarea duerme y libera el nucleo.
+// ---------------------------------------------------------------------------
+void tareaMedicion(void *param) {
+  TickType_t ultimo = xTaskGetTickCount();
+  const TickType_t periodo = pdMS_TO_TICKS(T_MUESTREO_MS);
+  for (;;) {
+    vTaskDelayUntil(&ultimo, periodo);
     tomarMuestra();
-    aplicarEstado(calcularObjetivo());
-    imprimirSerial();
   }
+}
+
+// ---------------------------------------------------------------------------
+//  TAREA DE ALARMAS (nucleo 1)
+//  Cada 10 ms: suficiente para los patrones de parpadeo y pitido (el mas
+//  corto dura 120 ms) y aislada del servidor web.
+// ---------------------------------------------------------------------------
+void tareaAlarmas(void *param) {
+  for (;;) {
+    actualizarAlarmas();
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+// loop() corre en el nucleo 1: servidor web, Wi-Fi y LCD.
+void loop() {
+  servidor.handleClient();
+  vigilarWiFi();
+
+  unsigned long ahora = millis();
   if (ahora - t_pagina >= T_PAGINA_MS) {
     t_pagina = ahora;
-    pagina = (pagina + 1) % 6;
+    pagina = (pagina + 1) % N_PAGINAS;
     mostrarPagina(pagina);
   }
-  actualizarAlarmas();   // en CADA vuelta: es quien lleva el ritmo
+  delay(2);              // cede el nucleo a las demas tareas
 }

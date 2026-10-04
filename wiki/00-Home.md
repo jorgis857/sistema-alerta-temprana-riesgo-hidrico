@@ -31,7 +31,7 @@ El funcionamiento completo del prototipo físico WREWS, incluyendo la adquisici�
 
 ## Anexos
 
-- Código fuente completo y documentado: [`/firmware/sketch.ino`](../firmware/sketch.ino)
+- Código fuente completo y documentado: [`/firmware/wrews/wrews.ino`](../firmware/wrews/wrews.ino)
 - Librerías utilizadas: [`/firmware/libraries.txt`](../firmware/libraries.txt)
 - Diagrama de conexión Wokwi: [`/hardware/wokwi/diagram.json`](../hardware/wokwi/diagram.json)
 - Chips personalizados (BME280, INA219, panel solar): [`/hardware/wokwi/chips`](../hardware/wokwi/chips)

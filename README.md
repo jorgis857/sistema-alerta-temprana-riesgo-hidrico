@@ -131,7 +131,10 @@ sistema-alerta-temprana-riesgo-hidrico/
 │   └── 10-English-Executive-Summary.md
 │
 ├── firmware/
-│   ├── sketch.ino
+│   ├── wrews/                  (abrir wrews.ino en Arduino IDE)
+│   │   ├── wrews.ino
+│   │   ├── tablero.h
+│   │   └── secrets.example.h   (copiar como secrets.h)
 │   └── libraries.txt
 │
 ├── hardware/
