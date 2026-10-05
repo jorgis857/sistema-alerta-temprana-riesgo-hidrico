@@ -321,13 +321,14 @@ void registrarEvento(uint8_t gravedad, const char *fmt, ...);
 // demo, el hotspot de un celular) y sirve el tablero dentro de ella.
 const char *NOMBRE_HOST = "wrews";     // http://wrews.local en PC
 const unsigned long WIFI_ESPERA_MS     = 15000;  // espera inicial en setup
-const unsigned long WIFI_REINTENTO_MS  = 10000;  // reintento si se cae
+const unsigned long WIFI_REINTENTO_MS  = 30000;  // respaldo si no reconecta solo
 WebServer servidor(80);
 bool      wifi_ok = false;             // solo se usan desde loop()
 char      ip_txt[16] = "0.0.0.0";
 unsigned long t_reintento_wifi = 0;
 uint16_t  reconexiones_wifi = 0;
 bool      mdns_ok = false;
+bool      servidor_listo = false;
 
 // ---- Parametros de calibracion ------------------------------------------
 // Los que se ajustan con mediciones del sitio. Se editan desde el tablero y
@@ -985,6 +986,10 @@ void eventoWiFi(WiFiEvent_t ev, WiFiEventInfo_t info) {
 void iniciarWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(NOMBRE_HOST);
+  // Sin ahorro de energia en el radio: con el ahorro activo, el ESP32 deja de
+  // escuchar entre paquetes y con hotspots de celular el tablero a veces no
+  // responde. Cuesta algo de consumo; un servidor necesita estar despierto.
+  WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
   WiFi.onEvent(eventoWiFi);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
@@ -1000,7 +1005,7 @@ void iniciarWiFi() {
   t_reintento_wifi = millis();
   vigilarWiFi();
   if (!wifi_ok)
-    Serial.println(F("Wi-Fi: sin conexion; se sigue intentando cada 10 s"));
+    Serial.println(F("Wi-Fi: sin conexion; se sigue intentando"));
 }
 
 // Corre en loop(). Mantiene wifi_ok / ip_txt y reintenta si la red se cayo.
@@ -1008,20 +1013,37 @@ void vigilarWiFi() {
   bool ahora_ok = (WiFi.status() == WL_CONNECTED);
 
   if (ahora_ok && !wifi_ok) {
-    snprintf(ip_txt, sizeof(ip_txt), "%s", WiFi.localIP().toString().c_str());
+    String ip = WiFi.localIP().toString();
+    bool ip_cambio = strcmp(ip_txt, "0.0.0.0") != 0 && !ip.equals(ip_txt);
+    snprintf(ip_txt, sizeof(ip_txt), "%s", ip.c_str());
     Serial.printf("Wi-Fi: conectado, IP %s, RSSI %d dBm\n", ip_txt, WiFi.RSSI());
-    if (!mdns_ok && MDNS.begin(NOMBRE_HOST)) {
-      MDNS.addService("http", "tcp", 80);
-      mdns_ok = true;
+
+    // Al volver la red se reinician el servidor y el mDNS: si el hotspot se
+    // reinicio, los sockets y el anuncio viejos pueden quedar inservibles.
+    if (servidor_listo) { servidor.stop(); servidor.begin(); }
+    if (mdns_ok) MDNS.end();
+    mdns_ok = MDNS.begin(NOMBRE_HOST);
+    if (mdns_ok) MDNS.addService("http", "tcp", 80);
+
+    if (ip_cambio) {
+      bloquear(mtx_estado);
+      registrarEvento(1, "La direccion del tablero cambio: http://%s", ip_txt);
+      liberar(mtx_estado);
     }
   }
-  if (!ahora_ok && wifi_ok) reconexiones_wifi++;
+  if (!ahora_ok && wifi_ok) {
+    reconexiones_wifi++;
+    t_reintento_wifi = millis();
+    Serial.println(F("Wi-Fi: red perdida; el ESP32 intenta reconectarse solo"));
+  }
   wifi_ok = ahora_ok;
 
-  // El reconectado automatico del ESP32 a veces se rinde: reintento propio
+  // Respaldo por si la reconexion automatica del ESP32 se rinde. Solo cada
+  // 30 s y sin WiFi.disconnect(): asociarse y pedir IP al hotspot puede
+  // tardar mas de 10 s, y cortar ese intento impedia reconectar.
   if (!wifi_ok && millis() - t_reintento_wifi > WIFI_REINTENTO_MS) {
     t_reintento_wifi = millis();
-    WiFi.disconnect();
+    Serial.println(F("Wi-Fi: reintento manual"));
     WiFi.begin(WIFI_SSID, WIFI_PASS);
   }
 }
@@ -1531,6 +1553,7 @@ void iniciarServidor() {
   servidor.on("/api/parametros/restaurar", HTTP_POST, apiParametrosRestaurar);
   servidor.onNotFound([]() { servidor.send(404, "text/plain", "No existe"); });
   servidor.begin();
+  servidor_listo = true;
   Serial.println(F("Servidor web en el puerto 80"));
 }
 
