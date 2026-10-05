@@ -48,6 +48,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
+#include <Preferences.h>
 #include <stdarg.h>
 #include "tablero.h"
 
@@ -73,7 +74,9 @@ const uint8_t PIN_BUZZER   = 19;
 
 #define LED_ON      LOW      // LEDs en anodo comun
 #define LED_OFF     HIGH
-const int BUZZER_HZ = 2500;  // buzzer PASIVO: necesita PWM, no continua
+const int BUZZER_HZ = 2000;  // buzzer PASIVO: necesita PWM, no continua
+const uint8_t  BUZZER_RES   = 8;                       // bits del PWM
+const uint32_t BUZZER_MEDIO = 1u << (BUZZER_RES - 1);  // 50 %: onda cuadrada
 
 // ===========================================================================
 //  CALIBRACION DEL RECIPIENTE
@@ -81,8 +84,9 @@ const int BUZZER_HZ = 2500;  // buzzer PASIVO: necesita PWM, no continua
 //  resonando por su propio pulso cuando ya vuelve el eco. D_LLENO = 3 cm
 //  esta dentro de esa zona; queda documentado como limitacion conocida.
 // ===========================================================================
-float D_LLENO_CM = 3.0;
-float D_VACIO_CM = 20.0;
+const float D_LLENO_DEF = 3.0, D_VACIO_DEF = 20.0;   // maqueta del Challenge 1
+float D_LLENO_CM = D_LLENO_DEF;     // editables desde el tablero (flash)
+float D_VACIO_CM = D_VACIO_DEF;
 
 // ===========================================================================
 //  PIRANOMETRO  [Ev 5][Ev 6]
@@ -94,7 +98,8 @@ float D_VACIO_CM = 20.0;
 //  piranometro o estacion, regresion por el origen: la etiqueta suele dar Imp,
 //  no Isc, y el K real quedaria cerca de 9-9.5 [Ev sec. 4].
 // ===========================================================================
-const float K_PANEL_WM2_POR_MA = 10.0;
+const float K_PANEL_DEF = 10.0;
+float K_PANEL_WM2_POR_MA = K_PANEL_DEF;   // editable desde el tablero (flash)
 float OFFSET_PANEL_MA  = 0.0;   // cero de oscuridad, medido al arrancar
 
 // Una corriente de reposo mayor que esto no es error del INA219 sino luz
@@ -115,7 +120,8 @@ const float OFFSET_MAX_MA = 1.0;
 //  - Ra fijo para latitud ~4.9 N: error < 3 % en ET a lo largo del ano [Ev 2].
 //  - En modo demo la ventana comprimida representa un dia; sus valores no son
 //    comparables 1 a 1 con los de campo (en la demo no hay noche). Supuesto.
-//  Pendiente: mover estas constantes al archivo de configuracion en LittleFS.
+//  ET_REF, el modo y la ventana demo se editan desde el tablero (flash);
+//  las demas son constantes del modelo y se cambian solo aqui.
 // ===========================================================================
 const float ALPHA_PT      = 1.26;      // [Ev 1] agua libre sin adveccion; [Ev 10] da 1.11 en tropico de altura
 const float ALBEDO_AGUA   = 0.06;      // [Ev 4]; [Ev 8] midio 0.041 y 0.079
@@ -127,12 +133,15 @@ const float RA_FIJO_MJ    = 36.0;      // [Ev 2] ec. 21 y anexo 2, MJ/m2 dia
 // ET de un dia despejado del sitio (Rs = Rso, T 16 C [22/8], HR 65 %,
 // P 75 kPa) con este mismo modelo [Ev 1][Ev 2]: 7.48 mm/dia. Asi el indice
 // es la fraccion de la demanda evaporativa maxima posible [Ev sec. 6].
-const float ET_REF_MM_DIA = 7.5;
+const float ET_REF_DEF = 7.5;
+float ET_REF_MM_DIA = ET_REF_DEF;       // editable desde el tablero (flash)
 
 // Escala diaria: ventana movil de 24 h [Ev 1][Ev 2]
-const bool     MODO_DEMO       = true;
+const bool     MODO_DEMO_DEF   = true;
+bool           MODO_DEMO       = MODO_DEMO_DEF;     // editable (flash)
 const uint32_t VENTANA_CAMPO_S = 86400;  // 24 h
-const uint32_t VENTANA_DEMO_S  = 120;    // TODO ajustar: "un dia" comprimido. Supuesto
+const uint32_t VENTANA_DEMO_DEF = 120;   // TODO ajustar: "un dia" comprimido. Supuesto
+uint32_t       VENTANA_DEMO_S  = VENTANA_DEMO_DEF;  // editable (flash)
 const uint8_t  NUM_BUCKETS     = 24;
 const float    COBERTURA_MIN   = 0.5;    // TODO: fraccion minima de ventana. Supuesto
 
@@ -173,7 +182,8 @@ const float W_TASA  = 0.16;   // tendencia: la senal mas ruidosa de las tres
 const float U_CRIT_NIVEL  = 15.0,  U_PREC_NIVEL  = 50.0;   // %
 const float U_CRIT_RIESGO = 69.2,  U_PREC_RIESGO = 36.2;   // 0-100
 const float U_CRIT_EVAP   = 85.0,  U_PREC_EVAP   = 60.0;   // 0-100
-const float U_CRIT_TASA   = 68.0,  U_PREC_TASA   = 33.0;   // pp/min
+const float U_CRIT_TASA_DEF = 68.0, U_PREC_TASA_DEF = 33.0;
+float       U_CRIT_TASA   = U_CRIT_TASA_DEF,  U_PREC_TASA = U_PREC_TASA_DEF;   // pp/min, editables (flash)
 const float TASA_REF      = 100.0;                          // pp/min
 
 // ===========================================================================
@@ -190,7 +200,8 @@ const uint8_t CONF_BAJAR   = 3;    // ciclos para desescalar
 // Cambio de nivel en una sola muestra que se interpreta como discontinuidad.
 // 8 pp sobre este recorrido equivalen a 1.4 cm/s: por encima de eso el
 // movimiento se clasifica como reposicionamiento, no como descenso.
-const float SALTO_DISCONTINUIDAD_PP = 8.0;
+const float SALTO_DEF = 8.0;
+float SALTO_DISCONTINUIDAD_PP = SALTO_DEF;   // editable desde el tablero (flash)
 
 // Banda muerta de la tasa [Pe 3][Pe 4]: se calcula sola al arrancar a partir del ruido
 // medido. BANDA_MANUAL es el respaldo si la caracterizacion sale contaminada.
@@ -267,8 +278,11 @@ const uint16_t PAT[4][4] = {
   {  400,  200, 1200, 250 },   // CRITICO     rojo parpadea, pitido insistente
   {  600,  300, 3000, 120 }    // FALLO       los tres juntos, tono muy grave
 };
+// El buzzer del prototipo armado no suena por encima de ~2000 Hz (barrido de
+// 500 a 4000 Hz el 2026-10-04: suena hasta 2000, nada desde 2500). Critico
+// queda en 2000 Hz, una octava sobre precaucion: se distinguen bien.
 //                       NORMAL  PREC  CRIT  FALLO
-const int BUZ_HZ[4]  = {      0, 1000, 2500,  600 };
+const int BUZ_HZ[4]  = {      0, 1000, 2000,  600 };
 
 unsigned long t_pagina = 0;
 uint8_t pagina = 0;
@@ -314,6 +328,23 @@ char      ip_txt[16] = "0.0.0.0";
 unsigned long t_reintento_wifi = 0;
 uint16_t  reconexiones_wifi = 0;
 bool      mdns_ok = false;
+
+// ---- Parametros de calibracion ------------------------------------------
+// Los que se ajustan con mediciones del sitio. Se editan desde el tablero y
+// se guardan en la flash (Preferences / NVS), asi la carcasa queda cerrada.
+// Los pesos y los umbrales de nivel, riesgo y evaporacion NO estan aqui:
+// estan justificados con referencias y se cambian solo en el codigo.
+struct Parametros {
+  float    d_lleno, d_vacio;          // cm, sensor -> agua
+  float    k_panel;                   // (W/m2)/mA
+  float    u_prec_tasa, u_crit_tasa;  // pp/min
+  float    salto;                     // pp
+  float    et_ref;                    // mm/dia
+  bool     modo_demo;
+  uint32_t vent_demo;                 // s
+};
+Preferences prefs;
+const char *NVS_ESPACIO = "wrews";
 
 // Sesiones del tablero: token aleatorio en una cookie HttpOnly.
 struct Sesion { char token[33]; unsigned long t_ms; bool activa; };
@@ -778,8 +809,23 @@ bool enFase(unsigned long t, uint16_t per, uint16_t on) {
   return (t % per) < on;
 }
 
-void buzzerOn(uint8_t est) { ledcWriteTone(PIN_BUZZER, BUZ_HZ[est]); }
-void buzzerOff()           { ledcWrite(PIN_BUZZER, 0); }
+// Buzzer pasivo con PWM: la frecuencia se cambia solo cuando cambia el
+// estado (ledcChangeFrequency reconfigura el temporizador) y el sonido se
+// prende y apaga con el ciclo util, 50 % o 0 %, que no reinicia la onda.
+// No se usa ledcWriteTone(): reconfigura el temporizador en cada llamada y,
+// llamada cada 10 ms, el tono de critico sonaba a clics.
+int buzzer_hz_actual = 0;                  // 0 = apagado; solo tareaAlarmas
+int buzzer_hz_timer  = BUZZER_HZ;          // frecuencia configurada en el PWM
+void buzzer(int hz) {
+  if (hz == buzzer_hz_actual) return;
+  if (hz > 0 && hz != buzzer_hz_timer) {
+    if (ledcChangeFrequency(PIN_BUZZER, hz, BUZZER_RES) == 0)
+      Serial.printf("Buzzer: no se pudo configurar %d Hz\n", hz);
+    buzzer_hz_timer = hz;
+  }
+  ledcWrite(PIN_BUZZER, hz > 0 ? BUZZER_MEDIO : 0);
+  buzzer_hz_actual = hz;
+}
 
 void apagarLeds() {
   digitalWrite(PIN_LED_V, LED_OFF);
@@ -824,7 +870,7 @@ void actualizarAlarmas() {
   }
 
   bool sonar = !mute && enFase(ahora, PAT[est][2], PAT[est][3]);
-  if (sonar) buzzerOn(est); else buzzerOff();
+  buzzer(sonar ? BUZ_HZ[est] : 0);
 }
 
 // ===========================================================================
@@ -1110,6 +1156,7 @@ void apiActual() {
   jsonNum(s, "pres_hpa", pres_hpa, 1);
   jsonNum(s, "vpd_kpa", vpd_kpa, 2);
   jsonNum(s, "rs_wm2", irradiancia, 0);
+  jsonNum(s, "corriente_ma", corriente_ma, 3);
   jsonNum(s, "rs_dia_mj", pt.rs_dia_mj, 2);
   jsonNum(s, "rn_mj", pt.rn_mj, 2);
   jsonNum(s, "delta", pt.delta, 4);
@@ -1134,6 +1181,7 @@ void apiActual() {
 void apiConfig() {
   if (!autorizado()) { responderNoAutorizado(); return; }
   String s = "{";
+  bloquear(mtx_estado);              // los de tasa, ET_REF y modo son editables
   jsonNum(s, "u_prec_nivel", U_PREC_NIVEL, 1);
   jsonNum(s, "u_crit_nivel", U_CRIT_NIVEL, 1);
   jsonNum(s, "u_prec_riesgo", U_PREC_RIESGO, 1);
@@ -1149,6 +1197,7 @@ void apiConfig() {
   jsonTxt(s, "modo", MODO_DEMO ? "DEMO" : "CAMPO");
   jsonEnt(s, "ventana_s", ventana_evap.duracion_s);
   jsonEnt(s, "hist_cada_s", HIST_CADA * T_MUESTREO_MS / 1000);
+  liberar(mtx_estado);
   jsonTxt(s, "red", WIFI_SSID);
   jsonCerrar(s, '}');
   servidor.send(200, "application/json", s);
@@ -1232,6 +1281,192 @@ void apiSilenciar() {
 }
 
 // ===========================================================================
+//  PARAMETROS DE CALIBRACION: FLASH Y API
+// ===========================================================================
+Parametros parametrosFabrica() {
+  return Parametros{ D_LLENO_DEF, D_VACIO_DEF, K_PANEL_DEF,
+                     U_PREC_TASA_DEF, U_CRIT_TASA_DEF, SALTO_DEF,
+                     ET_REF_DEF, MODO_DEMO_DEF, VENTANA_DEMO_DEF };
+}
+
+// Se llama con mtx_estado tomado (o antes de crear las tareas)
+Parametros parametrosActuales() {
+  return Parametros{ D_LLENO_CM, D_VACIO_CM, K_PANEL_WM2_POR_MA,
+                     U_PREC_TASA, U_CRIT_TASA, SALTO_DISCONTINUIDAD_PP,
+                     ET_REF_MM_DIA, MODO_DEMO, VENTANA_DEMO_S };
+}
+
+// Devuelve NULL si son validos, o el motivo para mostrar en el tablero
+const char *validarParametros(const Parametros &p) {
+  if (isnan(p.d_lleno) || p.d_lleno < 2 || p.d_lleno > 300)
+    return "Distancia con el tubo lleno: entre 2 y 300 cm";
+  if (isnan(p.d_vacio) || p.d_vacio < p.d_lleno + 2 || p.d_vacio > 400)
+    return "Distancia con el tubo vacio: al menos 2 cm mas que lleno y hasta 400 cm";
+  if (isnan(p.k_panel) || p.k_panel < 0.5 || p.k_panel > 100)
+    return "K del panel: entre 0.5 y 100 (W/m2)/mA";
+  if (isnan(p.u_prec_tasa) || p.u_prec_tasa < 0.5 || p.u_prec_tasa > 1000)
+    return "Tasa de precaucion: entre 0.5 y 1000 pp/min";
+  if (isnan(p.u_crit_tasa) || p.u_crit_tasa <= p.u_prec_tasa || p.u_crit_tasa > 1000)
+    return "Tasa critica: mayor que la de precaucion y hasta 1000 pp/min";
+  if (isnan(p.salto) || p.salto < 1 || p.salto > 100)
+    return "Salto de discontinuidad: entre 1 y 100 pp";
+  if (isnan(p.et_ref) || p.et_ref < 1 || p.et_ref > 20)
+    return "ET de referencia: entre 1 y 20 mm/dia";
+  if (p.vent_demo < 30 || p.vent_demo > 86400)
+    return "Ventana demo: entre 30 y 86400 s";
+  return NULL;
+}
+
+// Aplica en caliente. Se llama con mtx_estado tomado.
+// Si cambia la escala del nivel, la tendencia vieja ya no es comparable y se
+// reinicia; si cambia la ventana de evaporacion, se vuelve a llenar.
+void aplicarParametros(const Parametros &p) {
+  bool cambia_nivel   = (p.d_lleno != D_LLENO_CM || p.d_vacio != D_VACIO_CM);
+  bool cambia_ventana = (p.modo_demo != MODO_DEMO || p.vent_demo != VENTANA_DEMO_S);
+
+  D_LLENO_CM = p.d_lleno;           D_VACIO_CM = p.d_vacio;
+  K_PANEL_WM2_POR_MA = p.k_panel;
+  U_PREC_TASA = p.u_prec_tasa;      U_CRIT_TASA = p.u_crit_tasa;
+  SALTO_DISCONTINUIDAD_PP = p.salto;
+  ET_REF_MM_DIA = p.et_ref;
+  MODO_DEMO = p.modo_demo;          VENTANA_DEMO_S = p.vent_demo;
+
+  if (cambia_nivel) {
+    buf_n = 0; buf_i = 0; tasa_ppm = 0; nivel_anterior = NAN;
+  }
+  if (cambia_ventana)
+    ventanaReiniciar(ventana_evap, MODO_DEMO ? VENTANA_DEMO_S : VENTANA_CAMPO_S);
+}
+
+void imprimirParametros(const Parametros &p) {
+  Serial.printf("Parametros: lleno %.1f cm, vacio %.1f cm, K %.2f, tasa %.1f/%.1f pp/min, "
+                "salto %.1f pp, ET_REF %.2f, modo %s, ventana demo %lu s\n",
+                p.d_lleno, p.d_vacio, p.k_panel, p.u_prec_tasa, p.u_crit_tasa,
+                p.salto, p.et_ref, p.modo_demo ? "DEMO" : "CAMPO",
+                (unsigned long)p.vent_demo);
+}
+
+// Al arrancar: lo guardado en flash, o los de fabrica si no hay nada
+// (o si lo guardado no pasa la validacion).
+void cargarParametros() {
+  Parametros f = parametrosFabrica(), p = f;
+  bool hay = prefs.begin(NVS_ESPACIO, true);   // solo lectura
+  if (hay) {
+    p.d_lleno     = prefs.getFloat("d_lleno",     f.d_lleno);
+    p.d_vacio     = prefs.getFloat("d_vacio",     f.d_vacio);
+    p.k_panel     = prefs.getFloat("k_panel",     f.k_panel);
+    p.u_prec_tasa = prefs.getFloat("u_prec_tasa", f.u_prec_tasa);
+    p.u_crit_tasa = prefs.getFloat("u_crit_tasa", f.u_crit_tasa);
+    p.salto       = prefs.getFloat("salto",       f.salto);
+    p.et_ref      = prefs.getFloat("et_ref",      f.et_ref);
+    p.modo_demo   = prefs.getBool ("modo_demo",   f.modo_demo);
+    p.vent_demo   = prefs.getUInt ("vent_demo",   f.vent_demo);
+    prefs.end();
+  }
+  if (validarParametros(p)) {
+    Serial.println(F("Parametros en flash invalidos: se usan los de fabrica"));
+    p = f;
+  }
+  aplicarParametros(p);
+  Serial.print(hay ? F("Cargados de la flash. ") : F("De fabrica (flash vacia). "));
+  imprimirParametros(p);
+}
+
+bool guardarParametros(const Parametros &p) {
+  if (!prefs.begin(NVS_ESPACIO, false)) return false;
+  prefs.putFloat("d_lleno",     p.d_lleno);
+  prefs.putFloat("d_vacio",     p.d_vacio);
+  prefs.putFloat("k_panel",     p.k_panel);
+  prefs.putFloat("u_prec_tasa", p.u_prec_tasa);
+  prefs.putFloat("u_crit_tasa", p.u_crit_tasa);
+  prefs.putFloat("salto",       p.salto);
+  prefs.putFloat("et_ref",      p.et_ref);
+  prefs.putBool ("modo_demo",   p.modo_demo);
+  prefs.putUInt ("vent_demo",   p.vent_demo);
+  prefs.end();
+  return true;
+}
+
+// GET /api/parametros: valores actuales, de fabrica y las lecturas en vivo
+// que usan los asistentes de calibracion del tablero
+void apiParametros() {
+  if (!autorizado()) { responderNoAutorizado(); return; }
+  Parametros f = parametrosFabrica();
+  String s;
+  s.reserve(900);
+  s = "{";
+  bloquear(mtx_estado);
+  Parametros p = parametrosActuales();
+  jsonNum(s, "distancia_cm", distancia_cm, 1);
+  jsonNum(s, "corriente_ma", corriente_ma, 3);
+  liberar(mtx_estado);
+  jsonNum(s, "d_lleno", p.d_lleno, 1);          jsonNum(s, "def_d_lleno", f.d_lleno, 1);
+  jsonNum(s, "d_vacio", p.d_vacio, 1);          jsonNum(s, "def_d_vacio", f.d_vacio, 1);
+  jsonNum(s, "k_panel", p.k_panel, 2);          jsonNum(s, "def_k_panel", f.k_panel, 2);
+  jsonNum(s, "u_prec_tasa", p.u_prec_tasa, 1);  jsonNum(s, "def_u_prec_tasa", f.u_prec_tasa, 1);
+  jsonNum(s, "u_crit_tasa", p.u_crit_tasa, 1);  jsonNum(s, "def_u_crit_tasa", f.u_crit_tasa, 1);
+  jsonNum(s, "salto", p.salto, 1);              jsonNum(s, "def_salto", f.salto, 1);
+  jsonNum(s, "et_ref", p.et_ref, 2);            jsonNum(s, "def_et_ref", f.et_ref, 2);
+  jsonEnt(s, "modo_demo", p.modo_demo ? 1 : 0); jsonEnt(s, "def_modo_demo", f.modo_demo ? 1 : 0);
+  jsonEnt(s, "vent_demo", p.vent_demo);         jsonEnt(s, "def_vent_demo", f.vent_demo);
+  jsonCerrar(s, '}');
+  servidor.sendHeader("Cache-Control", "no-store");
+  servidor.send(200, "application/json", s);
+}
+
+// Aplica, guarda en flash y deja el cambio como evento
+void cambiarParametros(const Parametros &p, const char *que) {
+  const char *error = validarParametros(p);
+  if (error) {
+    String s = "{";
+    jsonTxt(s, "error", error);
+    jsonCerrar(s, '}');
+    servidor.send(400, "application/json", s);
+    return;
+  }
+  String ip = servidor.client().remoteIP().toString();
+  bloquear(mtx_estado);
+  aplicarParametros(p);
+  registrarEvento(0, "%s desde %s", que, ip.c_str());
+  liberar(mtx_estado);
+  imprimirParametros(p);
+  if (!guardarParametros(p)) {
+    servidor.send(500, "application/json",
+                  "{\"error\":\"Aplicado, pero no se pudo guardar en la flash\"}");
+    return;
+  }
+  apiParametros();
+}
+
+// POST /api/parametros: campos de formulario con los mismos nombres que el
+// GET. Un campo que no venga conserva su valor actual.
+void apiParametrosGuardar() {
+  if (!autorizado()) { responderNoAutorizado(); return; }
+  bloquear(mtx_estado);
+  Parametros p = parametrosActuales();
+  liberar(mtx_estado);
+  auto num = [](const char *k, float actual) {
+    return servidor.hasArg(k) ? servidor.arg(k).toFloat() : actual;
+  };
+  p.d_lleno     = num("d_lleno",     p.d_lleno);
+  p.d_vacio     = num("d_vacio",     p.d_vacio);
+  p.k_panel     = num("k_panel",     p.k_panel);
+  p.u_prec_tasa = num("u_prec_tasa", p.u_prec_tasa);
+  p.u_crit_tasa = num("u_crit_tasa", p.u_crit_tasa);
+  p.salto       = num("salto",       p.salto);
+  p.et_ref      = num("et_ref",      p.et_ref);
+  if (servidor.hasArg("modo_demo")) p.modo_demo = servidor.arg("modo_demo") == "1";
+  if (servidor.hasArg("vent_demo")) p.vent_demo = (uint32_t)servidor.arg("vent_demo").toInt();
+  cambiarParametros(p, "Configuracion cambiada");
+}
+
+// POST /api/parametros/restaurar: vuelve a los valores de fabrica
+void apiParametrosRestaurar() {
+  if (!autorizado()) { responderNoAutorizado(); return; }
+  cambiarParametros(parametrosFabrica(), "Configuracion de fabrica restaurada");
+}
+
+// ===========================================================================
 //  TABLERO: PAGINAS Y RUTAS
 // ===========================================================================
 void paginaTablero() {
@@ -1291,6 +1526,9 @@ void iniciarServidor() {
   servidor.on("/api/historial", HTTP_GET,  apiHistorial);
   servidor.on("/api/eventos",   HTTP_GET,  apiEventos);
   servidor.on("/api/silenciar", HTTP_POST, apiSilenciar);
+  servidor.on("/api/parametros", HTTP_GET,  apiParametros);
+  servidor.on("/api/parametros", HTTP_POST, apiParametrosGuardar);
+  servidor.on("/api/parametros/restaurar", HTTP_POST, apiParametrosRestaurar);
   servidor.onNotFound([]() { servidor.send(404, "text/plain", "No existe"); });
   servidor.begin();
   Serial.println(F("Servidor web en el puerto 80"));
@@ -1322,9 +1560,13 @@ void autotestSalidas() {
   digitalWrite(PIN_LED_V, LED_ON);  delay(300); digitalWrite(PIN_LED_V, LED_OFF);
   digitalWrite(PIN_LED_A, LED_ON);  delay(300); digitalWrite(PIN_LED_A, LED_OFF);
   digitalWrite(PIN_LED_R, LED_ON);  delay(300); digitalWrite(PIN_LED_R, LED_OFF);
-  ledcWriteTone(PIN_BUZZER, 2500);  delay(500);
-  ledcWrite(PIN_BUZZER, 0);
-  Serial.println(F("  Verde, amarillo, rojo y un tono de medio segundo.\n"));
+  // Los dos tonos de alarma, con la misma funcion que usa la tarea de alarmas
+  buzzer(BUZ_HZ[EST_PRECAUCION]);  delay(400);
+  buzzer(0);                       delay(200);
+  buzzer(BUZ_HZ[EST_CRITICO]);     delay(400);
+  buzzer(0);
+  Serial.printf("  Verde, amarillo, rojo y dos tonos: %d Hz (precaucion) y %d Hz (critico).\n\n",
+                BUZ_HZ[EST_PRECAUCION], BUZ_HZ[EST_CRITICO]);
 }
 
 // ---------------------------------------------------------------------------
@@ -1355,7 +1597,7 @@ bool autotestPT() {
   float rso_ref = (0.75 + 2e-5 * ALTITUD_M) * RA_FIJO_MJ;
   r = priestleyTaylor(rso_ref, 16.0, 22.0, 8.0, 65.0, 75.0, RA_FIJO_MJ);
   Serial.printf("  despejado: Rn=%.2f ET=%.3f\n", r.rn_mj, r.et_mm_dia);
-  ok &= chequeo("dia despejado -> ET_REF", fabs(r.et_mm_dia - ET_REF_MM_DIA) <= 0.05);
+  ok &= chequeo("dia despejado -> ET_REF", fabs(r.et_mm_dia - ET_REF_DEF) <= 0.05);
 
   r = priestleyTaylor(0.0, 14.0, 20.0, 7.0, 75.0, 75.0, RA_FIJO_MJ);
   ok &= chequeo("oscuridad -> Rn=0, ET=0", r.rn_mj == 0 && r.et_mm_dia == 0);
@@ -1404,7 +1646,7 @@ void setup() {
   // Estado seguro inmediato: pinMode() deja el pin en LOW y con polaridad
   // invertida eso significaria "encendido".
   pinMode(PIN_LED_V, OUTPUT); pinMode(PIN_LED_A, OUTPUT); pinMode(PIN_LED_R, OUTPUT);
-  ledcAttach(PIN_BUZZER, BUZZER_HZ, 8);
+  ledcAttach(PIN_BUZZER, BUZZER_HZ, BUZZER_RES);
   ledcWrite(PIN_BUZZER, 0);
   apagarLeds();
 
@@ -1454,6 +1696,8 @@ void setup() {
     }
   } else Serial.println(F("INA219 ... AUSENTE (irradiancia = 0)"));
 
+  // Antes del ruido: la caracterizacion usa las distancias calibradas
+  cargarParametros();
   caracterizarRuido();
 
   autotestPT();

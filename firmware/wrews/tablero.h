@@ -7,7 +7,8 @@
 //
 //  Datos: GET /api/actual (cada 2 s), /api/historial (cada 5 s),
 //         /api/eventos?desde=N (cuando cambia ultimo_evento), /api/config.
-//  Acciones: POST /api/silenciar, POST /logout.
+//  Acciones: POST /api/silenciar, POST /logout,
+//            GET y POST /api/parametros, POST /api/parametros/restaurar.
 // ============================================================================
 #pragma once
 
@@ -82,6 +83,19 @@ canvas{width:100%;height:150px;display:block}
 #eventos .pt{width:10px;height:10px;border-radius:50%;margin-top:5px;flex:none}
 #eventos .h{color:var(--sub);font-size:12px;white-space:nowrap;margin-left:auto}
 footer{color:var(--sub);font-size:12px;text-align:center;padding:4px 16px 20px}
+details.card>summary{cursor:pointer;font-weight:600;font-size:15px}
+#conf .grupo{border-top:1px solid var(--borde);margin-top:14px;padding-top:12px}
+#conf h3{margin:0 0 4px;font-size:14px}
+#conf .ayuda{color:var(--sub);font-size:13px;margin:0 0 10px}
+#conf .campos{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px 14px}
+#conf label{display:block;font-size:12px;color:var(--sub);margin-bottom:3px}
+#conf input,#conf select{width:100%;padding:8px 10px;border:1px solid var(--borde);border-radius:8px;background:var(--bg);color:var(--txt);font-size:15px}
+#conf .vivo{font-size:13px;margin:8px 0 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#conf .vivo b{font-variant-numeric:tabular-nums}
+#conf button{padding:8px 12px;border:1px solid var(--borde);border-radius:8px;background:var(--card);color:var(--txt);font-size:13px}
+#conf button.prim{background:var(--acc);border-color:var(--acc);color:#fff;font-size:15px;padding:10px 16px}
+#conf .acciones{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px}
+#confMsg{font-size:14px}
 </style></head><body>
 <header><div><h1>WREWS · Tablero de control</h1><small id="sub">Conectando…</small></div>
 <form method="post" action="/logout"><button type="submit">Cerrar sesión</button></form></header>
@@ -120,6 +134,53 @@ footer{color:var(--sub);font-size:12px;text-align:center;padding:4px 16px 20px}
 </section>
 
 <section class="card"><h2>Eventos</h2><ul id="eventos"><li><span class="h">Sin eventos todavía</span></li></ul></section>
+
+<details class="card" id="conf" ontoggle="if(this.open)cargarConf()">
+<summary>Configuración y calibración</summary>
+<p class="ayuda" style="margin-top:10px">Los cambios se aplican de inmediato y se guardan en el equipo: se conservan aunque se apague. Los pesos y los umbrales de nivel, riesgo y evaporación son fijos porque están justificados con referencias.</p>
+
+<div class="grupo"><h3>Nivel: distancias del sensor al agua</h3>
+<p class="ayuda">Llene el tubo, espere a que la lectura se estabilice y pulse «Usar como lleno»; repita con el tubo vacío. Por la zona ciega del sensor, «lleno» debe quedar a 5 cm o más.</p>
+<div class="campos">
+<div><label for="p_d_lleno">Tubo lleno (cm)</label><input id="p_d_lleno" type="number" step="0.1"></div>
+<div><label for="p_d_vacio">Tubo vacío (cm)</label><input id="p_d_vacio" type="number" step="0.1"></div>
+</div>
+<div class="vivo">Distancia medida ahora: <b id="lDist">—</b> cm
+<button type="button" onclick="usarDist('p_d_lleno')">Usar como lleno</button>
+<button type="button" onclick="usarDist('p_d_vacio')">Usar como vacío</button></div>
+</div>
+
+<div class="grupo"><h3>Piranómetro: constante del panel</h3>
+<p class="ayuda">Calibre con sol, no con la lámpara. Escriba la irradiancia de la referencia (piranómetro o estación) en el mismo momento y pulse «Calcular K».</p>
+<div class="campos">
+<div><label for="p_k_panel">K del panel ((W/m²)/mA)</label><input id="p_k_panel" type="number" step="0.01"></div>
+<div><label for="refIrr">Irradiancia de referencia (W/m²)</label><input id="refIrr" type="number" step="1"></div>
+</div>
+<div class="vivo">Corriente del panel ahora: <b id="lCorr">—</b> mA
+<button type="button" onclick="calcK()">Calcular K</button></div>
+</div>
+
+<div class="grupo"><h3>Tasa de descenso</h3>
+<p class="ayuda">Si cambia el recorrido del tubo, repita las dos maniobras de descenso para recalibrar estos valores.</p>
+<div class="campos">
+<div><label for="p_u_prec_tasa">Precaución (pp/min)</label><input id="p_u_prec_tasa" type="number" step="0.1"></div>
+<div><label for="p_u_crit_tasa">Crítico (pp/min)</label><input id="p_u_crit_tasa" type="number" step="0.1"></div>
+<div><label for="p_salto">Salto de discontinuidad (pp)</label><input id="p_salto" type="number" step="0.1"></div>
+</div></div>
+
+<div class="grupo"><h3>Evaporación</h3>
+<p class="ayuda">En modo demo, la ventana corta representa un día completo. Cambiar el modo o la ventana reinicia la estimación.</p>
+<div class="campos">
+<div><label for="p_modo_demo">Modo</label><select id="p_modo_demo"><option value="1">Demo (ventana corta)</option><option value="0">Campo (24 h)</option></select></div>
+<div><label for="p_vent_demo">Ventana demo (s)</label><input id="p_vent_demo" type="number" step="1"></div>
+<div><label for="p_et_ref">ET de referencia (mm/día)</label><input id="p_et_ref" type="number" step="0.01"></div>
+</div></div>
+
+<div class="acciones">
+<button type="button" class="prim" onclick="guardarConf()">Guardar cambios</button>
+<button type="button" onclick="restaurarConf()">Restaurar valores de fábrica</button>
+<span id="confMsg"></span></div>
+</details>
 </main>
 <footer id="pie"></footer>
 
@@ -200,6 +261,7 @@ function pintar(a){
   $('sub').textContent='Red '+(cfg.red||'')+' · señal '+a.rssi+' dBm · dato de hace '+edad.toFixed(1)+' s';
   $('pie').textContent='Equipo encendido hace '+dur(a.t_ms/1000)+' · reconexiones Wi-Fi: '+a.reconexiones_wifi+' · modo '+a.modo;
   document.title=(a.estado_n>0?'⚠ ':'')+'WREWS · '+(NOM[a.estado]||a.estado);
+  if($('conf').open)vivoConf(a.ultra_ok?a.distancia_cm:null,a.corriente_ma);
   pintarEventos();
 }
 
@@ -277,6 +339,52 @@ async function traerHistorial(){try{hist=await api('/api/historial',null,8000);p
 // Cada ciclo arranca cuando el anterior termino (no setInterval): nunca hay
 // dos peticiones del mismo tipo en vuelo.
 function repetir(fn,ms){const paso=async()=>{await fn();setTimeout(paso,ms);};setTimeout(paso,ms);}
+
+// ---- Configuracion y calibracion -----------------------------------------
+// Mismos nombres que /api/parametros (GET y POST)
+const CAMPOS=['d_lleno','d_vacio','k_panel','u_prec_tasa','u_crit_tasa','salto','et_ref','modo_demo','vent_demo'];
+function msgConf(t,tipo){const m=$('confMsg');m.textContent=t;m.style.color=css(tipo=='err'?'--crit':tipo=='ok'?'--ok':'--sub');}
+function vivoConf(d,i){$('lDist').textContent=fmt(d,1);$('lCorr').textContent=fmt(i,2);}
+function llenarConf(p){
+  for(const k of CAMPOS){const e=$('p_'+k);e.value=p[k];e.title='De fábrica: '+p['def_'+k];}
+  vivoConf(p.distancia_cm,p.corriente_ma);
+}
+async function cargarConf(){
+  try{llenarConf(await api('/api/parametros'));msgConf('');}
+  catch(e){msgConf('No se pudo leer la configuración','err');}
+}
+function usarDist(id){
+  if(!ultimo||!ultimo.ultra_ok||ultimo.distancia_cm==null){msgConf('El sensor de nivel no da lectura ahora','err');return;}
+  $(id).value=ultimo.distancia_cm.toFixed(1);msgConf('Falta pulsar «Guardar cambios»');
+}
+function calcK(){
+  const ref=parseFloat($('refIrr').value),i=ultimo?ultimo.corriente_ma:null;
+  if(!(ref>0)){msgConf('Escriba la irradiancia de referencia','err');return;}
+  if(!(i>0.05)){msgConf('La corriente del panel es casi cero: calibre con sol','err');return;}
+  $('p_k_panel').value=(ref/i).toFixed(2);msgConf('Falta pulsar «Guardar cambios»');
+}
+async function enviarConf(url,cuerpo){
+  msgConf('Guardando…');
+  const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),8000);
+  try{
+    const r=await fetch(url,{method:'POST',body:cuerpo,credentials:'same-origin',signal:ctl.signal});
+    if(r.status==401||r.status==403){location.href='/login';return;}
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok){msgConf(j.error||('Error '+r.status),'err');return;}
+    llenarConf(j);msgConf('Guardado y aplicado en el equipo','ok');
+    try{cfg=await api('/api/config');}catch(e){}
+    traerHistorial();ciclo();
+  }catch(e){msgConf('Sin conexión con el equipo: no se guardó','err');}
+  finally{clearTimeout(tm);}
+}
+function guardarConf(){
+  const b=new URLSearchParams();for(const k of CAMPOS)b.append(k,$('p_'+k).value);
+  enviarConf('/api/parametros',b);
+}
+function restaurarConf(){
+  if(confirm('¿Volver a los valores de fábrica? Se pierde la calibración guardada.'))
+    enviarConf('/api/parametros/restaurar',new URLSearchParams());
+}
 
 async function silenciar(){
   $('btnSil').disabled=true;
