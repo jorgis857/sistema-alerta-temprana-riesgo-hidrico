@@ -118,7 +118,7 @@ details.card>summary{cursor:pointer;font-weight:600;font-size:15px}
 <div class="card m"><div class="et">Temperatura</div><div class="v"><span id="vT">—</span> <span class="u">°C</span></div></div>
 <div class="card m"><div class="et">Humedad relativa</div><div class="v"><span id="vHr">—</span> <span class="u">%</span></div></div>
 <div class="card m"><div class="et">Presión</div><div class="v"><span id="vP">—</span> <span class="u">hPa</span></div></div>
-<div class="card m"><div class="et">Déficit de vapor</div><div class="v"><span id="vVpd">—</span> <span class="u">kPa</span></div></div>
+<div class="card m"><div class="et">Déficit de vapor</div><div class="v"><span id="vVpd">—</span> <span class="u">kPa</span></div><div class="n" id="nVpd"></div></div>
 </section>
 
 <section>
@@ -169,9 +169,9 @@ details.card>summary{cursor:pointer;font-weight:600;font-size:15px}
 </div></div>
 
 <div class="grupo"><h3>Evaporación</h3>
-<p class="ayuda">En modo demo, la ventana corta representa un día completo. Cambiar el modo o la ventana reinicia la estimación.</p>
+<p class="ayuda">En modo demo, el promedio de luz de la ventana corta se toma como el mediodía de un día con esa nubosidad. En campo se usan las 24 h reales. Cambiar el modo o la ventana reinicia la estimación.</p>
 <div class="campos">
-<div><label for="p_modo_demo">Modo</label><select id="p_modo_demo"><option value="1">Demo (ventana corta)</option><option value="0">Campo (24 h)</option></select></div>
+<div><label for="p_modo_demo">Modo</label><select id="p_modo_demo"><option value="1">Demo (ventana corta = mediodía)</option><option value="0">Campo (24 h)</option></select></div>
 <div><label for="p_vent_demo">Ventana demo (s)</label><input id="p_vent_demo" type="number" step="1"></div>
 <div><label for="p_et_ref">ET de referencia (mm/día)</label><input id="p_et_ref" type="number" step="0.01"></div>
 </div></div>
@@ -244,7 +244,9 @@ function pintar(a){
   $('vTasa').textContent=a.tasa_lista?fmt(a.tasa_ppm,1):'…';
   $('nTasa').textContent=a.tasa_lista?'Máx. '+fmt(a.tasa_max,1)+' pp/min':'Midiendo tendencia';
   tarjeta('cTasa',a.sev_tasa);
-  if(a.estado_evap=='OK'){$('vEvap').textContent=fmt(a.idx_evap,1);$('nEvap').textContent='Priestley-Taylor + VPD';}
+  // La evaporacion sola llega como maximo a precaucion: se aclara cuando su severidad es 2
+  if(a.estado_evap=='OK'){$('vEvap').textContent=fmt(a.idx_evap,1);
+    $('nEvap').textContent=a.sev_evap>=2?'Demanda extrema · sola cuenta como precaución':'Priestley-Taylor + VPD';}
   else{$('vEvap').textContent='…';$('nEvap').textContent='Estimación en curso ('+Math.round(a.cobertura_ventana*100)+' % de la ventana)';}
   tarjeta('cEvap',a.sev_evap);
   $('vRiesgo').textContent=fmt(a.riesgo,1);
@@ -256,9 +258,10 @@ function pintar(a){
   $('nRs').textContent='Día equiv. '+fmt(a.rs_dia_mj,1)+' MJ/m²';
   $('vT').textContent=fmt(a.temp_c,1);$('vHr').textContent=fmt(a.hum_pct,1);
   $('vP').textContent=fmt(a.pres_hpa,1);$('vVpd').textContent=fmt(a.vpd_kpa,2);
+  $('nVpd').textContent=a.estado_evap=='OK'?'Promedio de la ventana '+fmt(a.vpd_ventana_kpa,2)+' kPa':'';
 
   const edad=(a.t_ms-a.t_muestra_ms)/1000;
-  $('sub').textContent='Red '+(cfg.red||'')+' · señal '+a.rssi+' dBm · dato de hace '+edad.toFixed(1)+' s';
+  $('sub').textContent='Red '+(a.red||cfg.red||'')+' · señal '+a.rssi+' dBm · dato de hace '+edad.toFixed(1)+' s';
   $('pie').textContent='Equipo encendido hace '+dur(a.t_ms/1000)+' · reconexiones Wi-Fi: '+a.reconexiones_wifi+' · modo '+a.modo;
   document.title=(a.estado_n>0?'⚠ ':'')+'WREWS · '+(NOM[a.estado]||a.estado);
   if($('conf').open)vivoConf(a.ultra_ok?a.distancia_cm:null,a.corriente_ma);

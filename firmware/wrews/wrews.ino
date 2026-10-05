@@ -46,6 +46,7 @@
 #include <Adafruit_INA219.h>
 #include <LiquidCrystal_I2C.h>
 #include <WiFi.h>
+#include <WiFiMulti.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <Preferences.h>
@@ -118,8 +119,12 @@ const float OFFSET_MAX_MA = 1.0;
 //  - Rnl con FAO-56 ec. 39 [Ev 2] (calibrada para tierra) sobre agua:
 //    aproximacion habitual, declarada.
 //  - Ra fijo para latitud ~4.9 N: error < 3 % en ET a lo largo del ano [Ev 2].
-//  - En modo demo la ventana comprimida representa un dia; sus valores no son
-//    comparables 1 a 1 con los de campo (en la demo no hay noche). Supuesto.
+//  - En modo demo la luz de la ventana corta se toma como el mediodia de un
+//    dia con esa nubosidad (indice de claridad G / G_pico, con G_pico de un
+//    dia despejado de 12 h). Supone una forma de dia tipica; no reemplaza
+//    la ventana de 24 h de campo. Supuesto.
+//  - El VPD del indice es el de la ventana (es medio - ea), no el instantaneo.
+//  - La evaporacion sola lleva como maximo a PRECAUCION (ver calcularObjetivo).
 //  ET_REF, el modo y la ventana demo se editan desde el tablero (flash);
 //  las demas son constantes del modelo y se cambian solo aqui.
 // ===========================================================================
@@ -137,10 +142,11 @@ const float ET_REF_DEF = 7.5;
 float ET_REF_MM_DIA = ET_REF_DEF;       // editable desde el tablero (flash)
 
 // Escala diaria: ventana movil de 24 h [Ev 1][Ev 2]
+const float    N_HORAS_SOL     = 12.0;   // duracion del dia cerca del ecuador, [Ev 2] ec. 34
 const bool     MODO_DEMO_DEF   = true;
 bool           MODO_DEMO       = MODO_DEMO_DEF;     // editable (flash)
 const uint32_t VENTANA_CAMPO_S = 86400;  // 24 h
-const uint32_t VENTANA_DEMO_DEF = 120;   // TODO ajustar: "un dia" comprimido. Supuesto
+const uint32_t VENTANA_DEMO_DEF = 120;   // promedio de luz que se toma como mediodia. Supuesto
 uint32_t       VENTANA_DEMO_S  = VENTANA_DEMO_DEF;  // editable (flash)
 const uint8_t  NUM_BUCKETS     = 24;
 const float    COBERTURA_MIN   = 0.5;    // TODO: fraccion minima de ventana. Supuesto
@@ -247,13 +253,14 @@ struct Ventana {
 
 struct ResultadoPT {
   float rs_dia_mj, rn_mj, delta, gamma, frac_pt, ea_kpa, et_mm_dia;
+  float vpd_kpa;                 // VPD de la ventana: es medio - ea, [Ev 2] ec. 12 y 19
 };
 
 const uint8_t EVAP_CALCULANDO = 0, EVAP_OK = 1;
 const char *NOMBRE_EVAP[2] = { "CALCULANDO", "OK" };
 
 Ventana     ventana_evap;
-ResultadoPT pt = { 0, 0, 0, 0, 0, 0, 0 };
+ResultadoPT pt = { 0, 0, 0, 0, 0, 0, 0, 0 };
 uint8_t     estado_evap = EVAP_CALCULANDO;
 float       cobertura_ventana = 0;
 unsigned long t_evap_prev = 0;
@@ -322,6 +329,8 @@ void registrarEvento(uint8_t gravedad, const char *fmt, ...);
 const char *NOMBRE_HOST = "wrews";     // http://wrews.local en PC
 const unsigned long WIFI_ESPERA_MS     = 15000;  // espera inicial en setup
 const unsigned long WIFI_REINTENTO_MS  = 30000;  // respaldo si no reconecta solo
+const unsigned long WIFI_INTENTO_MS    = 10000;  // tiempo de cada intento de respaldo
+WiFiMulti redes;                       // red 1 y, opcional, red 2 (secrets.h)
 WebServer servidor(80);
 bool      wifi_ok = false;             // solo se usan desde loop()
 char      ip_txt[16] = "0.0.0.0";
@@ -493,6 +502,9 @@ ResultadoPT priestleyTaylor(float rs_dia, float t, float t_max, float t_min,
   r.gamma     = gammaPsi(p_kpa);                                // kPa/C, [Ev 2] ec. 8
   r.frac_pt   = r.delta / (r.delta + r.gamma);
   r.ea_kpa    = (hr / 100.0) * (esSat(t_max) + esSat(t_min)) / 2.0;  // [Ev 2] ec. 19
+  // VPD a la misma escala que ET: es medio de la ventana menos ea ([Ev 2]
+  // ec. 12), no el valor de un instante, que salta con cada pico de mediodia.
+  r.vpd_kpa   = max((esSat(t_max) + esSat(t_min)) / 2.0f - r.ea_kpa, 0.0f);
 
   float rso = (0.75 + 2e-5 * ALTITUD_M) * ra;                   // cielo despejado, [Ev 2] ec. 37
   // Maximo 1.0 por [Ev 2]. El minimo de 0.3 es Supuesto propio: evita un
@@ -511,13 +523,25 @@ ResultadoPT priestleyTaylor(float rs_dia, float t, float t_max, float t_min,
   return r;
 }
 
+float rsoSitio() { return (0.75 + 2e-5 * ALTITUD_M) * RA_FIJO_MJ; }   // [Ev 2] ec. 37
+
+// Irradiancia del mediodia de un dia despejado del sitio, suponiendo un dia
+// de N_HORAS_SOL con forma senoidal: Rso = G_pico * 2N/pi. Da ~1049 W/m2.
+float gPicoDespejado() { return PI * rsoSitio() * 1e6 / (2.0 * N_HORAS_SOL * 3600.0); }
+
 // ---------------------------------------------------------------------------
 //  Agrega la ventana y calcula ET. Devuelve la cobertura (0-1); con poca
 //  cobertura no hay estimacion y el resultado queda en cero.
-//  El equivalente diario Rs_dia = E * 86400 / t_cubierto permite usar
-//  ventanas cortas (demo) e incompletas (recien encendido).
+//  Radiacion del dia:
+//  - Campo (24 h): Rs_dia = E * 86400 / t_cubierto. Admite ventanas
+//    incompletas (recien encendido).
+//  - Demo (mediodia = true): la luz medida se toma como el MEDIODIA de un dia
+//    con esa nubosidad, con el indice de claridad G / G_pico (la idea de
+//    Rs/Rso de [Ev 2]): Rs_dia = min(G / G_pico, 1) * Rso. Antes se
+//    extrapolaba la ventana a 24 h iguales y, con sol real, 831 W/m2 daban
+//    72 MJ/m2 "por dia", 2.5 veces el maximo fisico: el indice se saturaba.
 // ---------------------------------------------------------------------------
-float evaluarVentana(const Ventana &v, ResultadoPT &r) {
+float evaluarVentana(const Ventana &v, ResultadoPT &r, bool mediodia) {
   float energia = 0, st = 0, shr = 0, sp = 0, cubierto = 0;
   float t_max = -1e9, t_min = 1e9;
   uint32_t n = 0;
@@ -533,10 +557,16 @@ float evaluarVentana(const Ventana &v, ResultadoPT &r) {
   }
   float cob = min(cubierto / v.duracion_s, 1.0f);
   if (n == 0 || cob < COBERTURA_MIN) {
-    r = ResultadoPT{ 0, 0, 0, 0, 0, 0, 0 };
+    r = ResultadoPT{ 0, 0, 0, 0, 0, 0, 0, 0 };
     return cob;
   }
-  float rs_dia = energia * 86400.0 / cubierto;
+  float rs_dia;
+  if (mediodia) {
+    float g_media = energia * 1e6 / cubierto;                   // W/m2 de la ventana
+    rs_dia = min(g_media / gPicoDespejado(), 1.0f) * rsoSitio();
+  } else {
+    rs_dia = energia * 86400.0 / cubierto;
+  }
   r = priestleyTaylor(rs_dia, st / n, t_max, t_min, shr / n, sp / n, RA_FIJO_MJ);
   return cob;
 }
@@ -727,13 +757,13 @@ void actualizarModelo(float d, float t, float h, float p, float i_ma) {
     ventanaAcumular(ventana_evap, irradiancia, temp_c, hum_pct,
                     pres_hpa / 10.0, dt_s);
 
-  cobertura_ventana = evaluarVentana(ventana_evap, pt);
+  cobertura_ventana = evaluarVentana(ventana_evap, pt, MODO_DEMO);
   if (cobertura_ventana < COBERTURA_MIN) {
     estado_evap = EVAP_CALCULANDO;
     idx_evap = 0;
   } else {
     estado_evap = EVAP_OK;
-    idx_evap = indiceEvaporativo(pt.et_mm_dia, vpd_kpa);
+    idx_evap = indiceEvaporativo(pt.et_mm_dia, pt.vpd_kpa);   // VPD de la ventana
   }
 
   // ---- Riesgo hidrico ponderado ----------------------------------------
@@ -763,7 +793,13 @@ uint8_t calcularObjetivo() {
   s_tasa   = severidad(tasa_ppm,  U_PREC_TASA,   U_CRIT_TASA,   false);
   s_riesgo = severidad(riesgo,    U_PREC_RIESGO, U_CRIT_RIESGO, false);
 
-  uint8_t peor = max(max(s_nivel, s_evap), max(s_tasa, s_riesgo));
+  // La evaporacion es un FORZANTE, no la disponibilidad de agua: por si sola
+  // llega como maximo a PRECAUCION. Un mediodia seco y soleado con el
+  // embalse lleno no es una emergencia. Su severidad se sigue reportando
+  // completa (s_evap = 2 se ve en el tablero) y entra al riesgo combinado
+  // con su peso: con el nivel bajo, el riesgo si lleva a CRITICO.
+  uint8_t s_evap_estado = min(s_evap, (uint8_t)1);
+  uint8_t peor = max(max(s_nivel, s_evap_estado), max(s_tasa, s_riesgo));
   if (peor == 2) return EST_CRITICO;
   return (peor == 1) ? EST_PRECAUCION : EST_NORMAL;
 }
@@ -936,7 +972,7 @@ void armarPagina(uint8_t p, char *l1, char *l2) {
     case 6:
       // Direccion del tablero: Android no resuelve wrews.local, la IP si
       snprintf(l1, 17, "WiFi: %s", wifi_ok ? "conectado" : "sin red");
-      snprintf(l2, 17, "%s", wifi_ok ? ip_txt : WIFI_SSID);
+      snprintf(l2, 17, "%s", wifi_ok ? ip_txt : "buscando red...");
       break;
   }
 }
@@ -969,8 +1005,8 @@ void eventoWiFi(WiFiEvent_t ev, WiFiEventInfo_t info) {
   if (ev == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
     IPAddress ip(info.got_ip.ip_info.ip.addr);
     bloquear(mtx_estado);
-    registrarEvento(0, "Wi-Fi conectado, tablero en http://%s",
-                    ip.toString().c_str());
+    registrarEvento(0, "Wi-Fi %s: tablero en http://%s",
+                    WiFi.SSID().c_str(), ip.toString().c_str());
     liberar(mtx_estado);
     estaba_conectado = true;
   } else if (ev == ARDUINO_EVENT_WIFI_STA_DISCONNECTED && estaba_conectado) {
@@ -992,16 +1028,19 @@ void iniciarWiFi() {
   WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
   WiFi.onEvent(eventoWiFi);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.printf("Wi-Fi: conectando a \"%s\"", WIFI_SSID);
+
+  // Una o dos redes: WiFiMulti busca las configuradas y se une a la de mejor
+  // senal. La segunda es opcional (WIFI_SSID_2 en secrets.h).
+  redes.addAP(WIFI_SSID, WIFI_PASS);
+  Serial.printf("Wi-Fi: red 1 \"%s\"\n", WIFI_SSID);
+#ifdef WIFI_SSID_2
+  redes.addAP(WIFI_SSID_2, WIFI_PASS_2);
+  Serial.printf("Wi-Fi: red 2 \"%s\"\n", WIFI_SSID_2);
+#endif
 
   // Espera acotada: sin red el equipo arranca igual y reintenta desde loop()
-  unsigned long t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_ESPERA_MS) {
-    delay(500);
-    Serial.print('.');
-  }
-  Serial.println();
+  Serial.println(F("Wi-Fi: buscando..."));
+  redes.run(WIFI_ESPERA_MS);
   t_reintento_wifi = millis();
   vigilarWiFi();
   if (!wifi_ok)
@@ -1016,7 +1055,8 @@ void vigilarWiFi() {
     String ip = WiFi.localIP().toString();
     bool ip_cambio = strcmp(ip_txt, "0.0.0.0") != 0 && !ip.equals(ip_txt);
     snprintf(ip_txt, sizeof(ip_txt), "%s", ip.c_str());
-    Serial.printf("Wi-Fi: conectado, IP %s, RSSI %d dBm\n", ip_txt, WiFi.RSSI());
+    Serial.printf("Wi-Fi: conectado a \"%s\", IP %s, RSSI %d dBm\n",
+                  WiFi.SSID().c_str(), ip_txt, WiFi.RSSI());
 
     // Al volver la red se reinician el servidor y el mDNS: si el hotspot se
     // reinicio, los sockets y el anuncio viejos pueden quedar inservibles.
@@ -1038,13 +1078,15 @@ void vigilarWiFi() {
   }
   wifi_ok = ahora_ok;
 
-  // Respaldo por si la reconexion automatica del ESP32 se rinde. Solo cada
-  // 30 s y sin WiFi.disconnect(): asociarse y pedir IP al hotspot puede
-  // tardar mas de 10 s, y cortar ese intento impedia reconectar.
+  // Respaldo por si la reconexion automatica del ESP32 se rinde (o si la red
+  // que estaba ya no existe y la otra si). Solo cada 30 s: asociarse y pedir
+  // IP al hotspot puede tardar mas de 10 s, y cortar ese intento impedia
+  // reconectar. redes.run() bloquea loop() unos segundos (busca y conecta);
+  // la medicion y la alarma siguen, porque van en sus propias tareas.
   if (!wifi_ok && millis() - t_reintento_wifi > WIFI_REINTENTO_MS) {
-    t_reintento_wifi = millis();
     Serial.println(F("Wi-Fi: reintento manual"));
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    redes.run(WIFI_INTENTO_MS);
+    t_reintento_wifi = millis();
   }
 }
 
@@ -1186,6 +1228,7 @@ void apiActual() {
   jsonNum(s, "frac_pt", pt.frac_pt, 3);
   jsonNum(s, "ea_kpa", pt.ea_kpa, 3);
   jsonNum(s, "et_mm_dia", pt.et_mm_dia, 2);
+  jsonNum(s, "vpd_ventana_kpa", pt.vpd_kpa, 2);
   jsonNum(s, "idx_evap", idx_evap, 1);
   jsonNum(s, "cobertura_ventana", cobertura_ventana, 2);
   jsonTxt(s, "estado_evap", NOMBRE_EVAP[estado_evap]);
@@ -1193,6 +1236,7 @@ void apiActual() {
   jsonEnt(s, "ultimo_evento", ev_sig - 1);
   liberar(mtx_estado);
   jsonEnt(s, "rssi", WiFi.RSSI());
+  jsonTxt(s, "red", WiFi.SSID().c_str());
   jsonEnt(s, "reconexiones_wifi", reconexiones_wifi);
   jsonCerrar(s, '}');
   servidor.sendHeader("Cache-Control", "no-store");
@@ -1220,7 +1264,7 @@ void apiConfig() {
   jsonEnt(s, "ventana_s", ventana_evap.duracion_s);
   jsonEnt(s, "hist_cada_s", HIST_CADA * T_MUESTREO_MS / 1000);
   liberar(mtx_estado);
-  jsonTxt(s, "red", WIFI_SSID);
+  jsonTxt(s, "red", WiFi.SSID().c_str());
   jsonCerrar(s, '}');
   servidor.send(200, "application/json", s);
 }
@@ -1617,8 +1661,7 @@ bool autotestPT() {
   ok &= chequeo("Ra=36.0 -> ET 4.61", fabs(r.et_mm_dia - 4.61) <= 0.05);
 
   // Dia despejado de referencia: debe reproducir ET_REF [Ev sec. 6]
-  float rso_ref = (0.75 + 2e-5 * ALTITUD_M) * RA_FIJO_MJ;
-  r = priestleyTaylor(rso_ref, 16.0, 22.0, 8.0, 65.0, 75.0, RA_FIJO_MJ);
+  r = priestleyTaylor(rsoSitio(), 16.0, 22.0, 8.0, 65.0, 75.0, RA_FIJO_MJ);
   Serial.printf("  despejado: Rn=%.2f ET=%.3f\n", r.rn_mj, r.et_mm_dia);
   ok &= chequeo("dia despejado -> ET_REF", fabs(r.et_mm_dia - ET_REF_DEF) <= 0.05);
 
@@ -1629,26 +1672,45 @@ bool autotestPT() {
   static Ventana v1, v2;
   ventanaReiniciar(v1, 120);
   for (uint8_t k = 0; k < 10; k++) ventanaAcumular(v1, 500, 14, 75, 75, 1.0);
-  float cob = evaluarVentana(v1, r);
+  float cob = evaluarVentana(v1, r, false);
   ok &= chequeo("cobertura baja -> sin estimacion",
                 cob < COBERTURA_MIN && r.et_mm_dia == 0);
 
-  // Muestras constantes: el equivalente diario no depende de la ventana
-  ResultadoPT r_demo, r_campo;
-  ventanaReiniciar(v1, VENTANA_DEMO_S);
+  // Campo: con muestras constantes el equivalente diario no depende de la
+  // duracion de la ventana (120 s y 24 h dan lo mismo)
+  ResultadoPT r_corta, r_24h;
+  ventanaReiniciar(v1, 120);
   ventanaReiniciar(v2, VENTANA_CAMPO_S);
-  for (uint32_t k = 0; k < VENTANA_DEMO_S; k++)
+  for (uint32_t k = 0; k < 120; k++)
     ventanaAcumular(v1, 500, 14, 75, 75, 1.0);
   for (uint32_t k = 0; k < VENTANA_CAMPO_S / 10; k++)
     ventanaAcumular(v2, 500, 14, 75, 75, 10.0);
-  evaluarVentana(v1, r_demo);
-  evaluarVentana(v2, r_campo);
-  Serial.printf("  demo: Rs=%.2f ET=%.3f | campo: Rs=%.2f ET=%.3f\n",
-                r_demo.rs_dia_mj, r_demo.et_mm_dia,
-                r_campo.rs_dia_mj, r_campo.et_mm_dia);
-  ok &= chequeo("demo == campo con muestras constantes",
-                fabs(r_demo.et_mm_dia - r_campo.et_mm_dia) < 0.01 &&
-                fabs(r_demo.rs_dia_mj - 43.2) < 0.1);
+  evaluarVentana(v1, r_corta, false);
+  evaluarVentana(v2, r_24h, false);
+  Serial.printf("  campo 120 s: Rs=%.2f ET=%.3f | campo 24 h: Rs=%.2f ET=%.3f\n",
+                r_corta.rs_dia_mj, r_corta.et_mm_dia,
+                r_24h.rs_dia_mj, r_24h.et_mm_dia);
+  ok &= chequeo("campo: no depende de la duracion de la ventana",
+                fabs(r_corta.et_mm_dia - r_24h.et_mm_dia) < 0.01 &&
+                fabs(r_corta.rs_dia_mj - 43.2) < 0.1);
+
+  // Demo (mediodia): sol de mediodia despejado -> un dia despejado (Rs = Rso);
+  // 500 W/m2 -> la fraccion 500 / G_pico de un dia despejado
+  ResultadoPT r_desp, r_500;
+  ventanaReiniciar(v1, 120);
+  ventanaReiniciar(v2, 120);
+  for (uint32_t k = 0; k < 120; k++) {
+    ventanaAcumular(v1, gPicoDespejado(), 14, 75, 75, 1.0);
+    ventanaAcumular(v2, 500, 14, 75, 75, 1.0);
+  }
+  evaluarVentana(v1, r_desp, true);
+  evaluarVentana(v2, r_500, true);
+  float rs_500 = 500.0 / gPicoDespejado() * rsoSitio();
+  Serial.printf("  demo: G_pico=%.0f W/m2 -> Rs=%.2f (Rso %.2f) | 500 W/m2 -> Rs=%.2f\n",
+                gPicoDespejado(), r_desp.rs_dia_mj, rsoSitio(), r_500.rs_dia_mj);
+  ok &= chequeo("demo: mediodia despejado -> Rs = Rso",
+                fabs(r_desp.rs_dia_mj - rsoSitio()) < 0.1 &&
+                fabs(r_500.rs_dia_mj - rs_500) < 0.1);
 
   Serial.println(ok ? F("  Todo OK\n") : F("  HAY FALLAS: revisar el modelo\n"));
   return ok;
