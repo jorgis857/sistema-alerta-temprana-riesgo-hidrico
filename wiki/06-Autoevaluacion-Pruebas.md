@@ -26,6 +26,21 @@ Esta sección evalúa de forma crítica el protocolo de validación aplicado a W
 | Se prueban exactamente todos los valores en el borde de cada umbral | ⚠️ Parcial | Se probaron rangos representativos, pero no todos los valores límite exactos |
 | Se realizan pruebas prolongadas de horas o días de operación continua | ❌ No | Fuera del alcance temporal de esta iteración |
 
+### Pruebas añadidas en el Challenge #2
+
+| Criterio del enunciado | ¿Se cumple? | Evidencia / observación |
+|---|---|---|
+| Calibración de sensores contra referencia, con error y factor de calibración | ⚠️ Parcial ⟨actualizar⟩ | Nivel contra regla y BME280 contra termohigrómetro (Sección 5.7.1); K del panel pendiente de calibrar con sol contra una referencia |
+| Emulación acelerada de condiciones reales | ✅ Sí | Vaciado del tubo, sol y sombra sobre el panel, secador sobre el BME280 (Sección 5.7.3) |
+| Validación de la fusión y los umbrales, con falsos positivos y negativos | ⚠️ ⟨actualizar⟩ | Casos F1–F12 (Sección 5.7.4). La prueba al sol con el tubo lleno detectó un falso positivo y motivó la regla de tope de la evaporación |
+| Latencia de la alerta y actualización del valor actual y del histórico | ⚠️ ⟨actualizar⟩ | Actualización y avisos observados; falta el número de latencia medido |
+| Desactivación de la alarma desde el tablero | ✅ Sí | El buzzer se calla 15 min, los LEDs siguen y queda el evento |
+| Pérdida y reconexión de la WLAN | ✅ Sí | La alarma local siguió funcionando; el tablero se recuperó solo después de la corrección (Sección 5.7.6) |
+| Acceso restringido a dispositivos autorizados | ⚠️ ⟨actualizar⟩ | Mecanismo implementado (misma subred + sesión); falta registrar la prueba con clave incorrecta y desde fuera de la WLAN |
+| Valores fuera de rango y fallo de sensores | ⚠️ ⟨actualizar⟩ | Nivel limitado a 0–100 %; FALLO por sensor ausente ⟨registrar⟩ |
+| Repetibilidad, precisión y consumo | ⚠️ ⟨actualizar⟩ | Ver Sección 5.7.7 |
+| Verificación del modelo de evaporación contra valores de referencia | ✅ Sí | Autotest en el ESP32 real, con diferencias de redondeo frente al cálculo independiente (Sección 5.7.2) |
+
 ---
 
 ## 6.2 Fortalezas del protocolo
@@ -106,6 +121,14 @@ Aunque el prototipo cumplió los objetivos funcionales del reto, el protocolo pr
 | El extremo lleno del rango (3 cm) cae dentro de la zona ciega del sensor ultrasónico: por debajo de ~5 cm el transductor sigue resonando por su propio pulso cuando ya retorna el eco | Se observaron lecturas fallidas ocasionales con la plataforma en posición alta. Elevar el sensor por encima de 10 cm alargaría además el recorrido y reduciría el peso relativo del ruido |
 | La escala temporal del banco de pruebas difiere en dos órdenes de magnitud de la de campo | Con el ruido y la geometría del montaje, la banda muerta supera ampliamente los umbrales que tendrían sentido en un reservorio real; ese régimen exigiría un transductor de presión sumergible o un sensor radar |
 | No se caracterizó el consumo energético | El diseño contempla alimentación por panel y batería, pero no se midió el consumo por modo ni se dimensionó la autonomía; queda pendiente implementar *deep sleep* con despertar por alarma |
+| **(Ch. #2)** El Wi-Fi opera sin ahorro de energía | Necesario para que el tablero responda siempre con hotspots de celular, pero aumenta el consumo y reduce la autonomía con pilas |
+| **(Ch. #2)** El tablero va por HTTP, sin TLS | La clave viaja una vez al iniciar sesión y solo la protege el WPA2 de la WLAN; las sesiones se pierden si el equipo se reinicia |
+| **(Ch. #2)** Las redes Wi-Fi van grabadas en el firmware (hasta dos) | Usar otra red exige reprogramar el equipo |
+| **(Ch. #2)** El modo demo supone que la luz medida es la del mediodía de un día típico de 12 h | Sirve para pruebas cortas; el valor de campo sale de la ventana de 24 h, que tarda 12 h en estar disponible |
+| **(Ch. #2)** El banco de pruebas no es un embalse | Valida la cadena de cálculo y la respuesta del índice evaporativo, no los mm/día absolutos; G ≈ 0 es un supuesto que no se cumple en agua profunda |
+| **(Ch. #2)** Umbrales de evaporación 60 / 85 sin datos locales | Siguen siendo un supuesto; el método para cerrarlos (percentiles de una estación del IDEAM) queda como trabajo futuro |
+| **(Ch. #2)** La referencia de humedad y temperatura es del mismo orden de exactitud que el BME280 | La comparación es una verificación de consistencia, no una calibración formal |
+| **(Ch. #2)** La caja impresa corresponde a una versión anterior del diseño | ⟨completar: la tapa no ajusta y el USB-C no queda accesible; se reimprime para el tercer corte⟩ |
 
 ---
 
@@ -149,6 +172,8 @@ El protocolo aplicado permitió validar satisfactoriamente el objetivo central d
 La combinación de simulación y prototipado físico fortaleció la validación, ya que permitió comprobar tanto la lógica matemática del sistema como su comportamiento real utilizando sensores y actuadores.
 
 Las principales limitaciones restantes corresponden a una futura validación de campo, calibración metrológica y pruebas prolongadas, no al funcionamiento básico del prototipo presentado.
+
+En el Challenge #2 el protocolo se amplió a los bloques que exige el enunciado (calibración, emulación acelerada, fusión, notificación, robustez y desempeño). Su valor principal estuvo en que **encontró fallas reales que se corrigieron**: la saturación del índice evaporativo con sol real en modo demo, el falso positivo de CRÍTICO por evaporación con el tubo lleno, el tablero que no se recuperaba tras una caída de la WLAN y el tono de crítico que el buzzer no podía reproducir.
 
 ---
 

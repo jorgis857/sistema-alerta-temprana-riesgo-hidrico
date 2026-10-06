@@ -90,21 +90,23 @@ Por tanto, WREWS puede diferenciar entre un nivel determinado que permanece rela
 El índice general de riesgo utiliza tres componentes:
 
 ```text
-Déficit de nivel                 50 %
+Déficit de nivel                 54 %   (50 % en el Challenge #1)
 Condiciones evaporativas        30 %
-Tasa de descenso                20 %
+Tasa de descenso                16 %   (20 % en el Challenge #1)
 ```
 
 De forma conceptual:
 
 ```text
 RIESGO =
-0.50 × Déficit de nivel
+0.54 × Déficit de nivel
 +
 0.30 × Índice evaporativo
 +
-0.20 × Tendencia
+0.16 × Tendencia
 ```
+
+Los pesos del Challenge #2 son el vector del método AHP (Sección 3.2.5); las pruebas de simulación de la Sección 5.4 se hicieron con los pesos del Challenge #1.
 
 Además del resultado ponderado, el firmware utiliza **reglas de seguridad**.
 
@@ -207,7 +209,7 @@ Se eligió la media geométrica sobre la aritmética porque ambas maniobras se c
 
 El detector de discontinuidad impone además un techo: 8 pp entre mediciones consecutivas equivalen a 1.4 cm/s sobre este recorrido, por encima de lo cual el movimiento se clasifica como reposicionamiento y no como descenso.
 
-**Cero del piranómetro.** Se caracterizó promediando 20 lecturas del INA219 con el panel sin iluminación, obteniendo __ mA. Ese valor corresponde al offset del amplificador del INA219 más la corriente de fuga del panel, y se resta de todas las lecturas posteriores. La pendiente de la escala se deriva de la corriente de cortocircuito declarada por el fabricante (100 mA a 1000 W/m²), valor **pendiente de verificación experimental**: las etiquetas de paneles pequeños suelen declarar la corriente en el punto de máxima potencia, típicamente entre 5 y 10 % menor que la de cortocircuito.
+**Cero del piranómetro.** Se caracterizó promediando 20 lecturas del INA219 con el panel sin iluminación, obteniendo −0.11 mA (−0.105 y −0.115 mA en dos arranques del 4 de octubre de 2026, equivalentes a ≈ 1 W/m²). Ese valor corresponde al offset del amplificador del INA219 más la corriente de fuga del panel, y se resta de todas las lecturas posteriores. Desde el firmware v7 solo se toma como cero si su magnitud es menor de 1 mA (10 W/m²): un valor mayor indica que había luz sobre el panel al encender, y tomarlo como cero restaría esa luz de todas las lecturas. La pendiente de la escala se deriva de la corriente de cortocircuito declarada por el fabricante (100 mA a 1000 W/m²), valor **pendiente de verificación experimental**: las etiquetas de paneles pequeños suelen declarar la corriente en el punto de máxima potencia, típicamente entre 5 y 10 % menor que la de cortocircuito.
 
 Las pruebas permitieron comprobar el **funcionamiento completo del prototipo** y la correspondencia entre la lógica previamente validada en Wokwi y el comportamiento del montaje físico.
 
@@ -272,6 +274,127 @@ La plataforma móvil permite reproducir cambios de nivel de manera controlada, r
 Por tanto, las pruebas realizadas permiten validar el funcionamiento del prototipo a escala de laboratorio.
 
 Una implementación en un reservorio real requeriría posteriormente calibración específica para su geometría y condiciones ambientales.
+
+---
+
+## 5.7 Validación del Challenge #2
+
+El banco de pruebas del Challenge #2 se organizó según los bloques mínimos del enunciado. Las pruebas se hicieron sobre el equipo integrado (carcasa, tubo de PVC, alimentación por pilas) con el firmware v7, al sol, y con el tablero abierto desde celulares y PC conectados al hotspot que hace de WLAN de la zona.
+
+> Las celdas marcadas con ⟨completar⟩ corresponden a mediciones que el equipo debe registrar con sus propios datos.
+
+### Criterios de aceptación
+
+Fijados en la hoja de trabajo del equipo antes de las pruebas:
+
+| Prueba | Criterio de aceptación | Resultado |
+|---|---|---|
+| Nivel contra referencia | Error ≤ ±1 cm tras calibración | ⟨completar⟩ |
+| Temperatura y humedad contra referencia | T ≤ ±1 °C; HR ≤ ±5 % | ⟨completar⟩ |
+| Fusión y umbrales | ≥ 12 escenarios × 3 repeticiones; 0 falsos negativos en escenarios críticos; ≤ 1 falso positivo; sin oscilación al bajar de estado | ⟨completar⟩ |
+| Latencia | Alarma física ≤ 2 s y tablero ≤ 5 s tras el evento (desde que se cumple la condición; la escalera de estados agrega la confirmación) | ⟨completar⟩ |
+| Acceso restringido | Un dispositivo no autorizado no accede a los datos | ⟨completar⟩ |
+| Caída de la WLAN | La alerta in situ continúa; reconexión automática < 60 s | ✅ alerta in situ continúa; tiempo de reconexión ⟨completar⟩ |
+| Repetibilidad | Desviación estándar del nivel ≤ 0.5 cm; *jitter* del periodo de muestreo < 5 % con el tablero en uso | ⟨completar⟩ |
+| Consumo | Consumo medio reportado; autonomía objetivo ≥ 24 h | ⟨completar⟩ |
+| Larga duración | 12–24 h encendido sin reinicios | ⟨completar⟩ |
+
+> Sobre el criterio de acceso: en la implementación final, un dispositivo fuera de la subred de la WLAN recibe **403**, y uno dentro de la WLAN pero sin sesión es enviado al inicio de sesión (**401** en la API). La lista blanca de IP planeada se reemplazó por la sesión con usuario y contraseña (ver [Sección 12.4](12-Mejoras-Challenge-1.md)).
+
+### 5.7.1 Calibración contra referencia (*ground truth*)
+
+| Sensor | Referencia | Procedimiento | Resultado |
+|---|---|---|---|
+| Nivel (HC-SR04 en el tubo) | Regla graduada junto al tubo | Distancias de lleno y vacío capturadas desde el tablero ("Usar como lleno/vacío"); luego 5 o más alturas de agua comparadas con el nivel del tablero | Lleno = ⟨completar⟩ cm, vacío = ⟨completar⟩ cm; error medio = ⟨completar⟩ pp; error máximo = ⟨completar⟩ pp |
+| Panel + INA219 | ⟨completar: piranómetro o estación de referencia⟩ | Con sol, irradiancia de referencia en el tablero y "Calcular K" (regresión por el origen si hay varias medidas) | K = ⟨completar⟩ (W/m²)/mA (etiqueta: 10); R² = ⟨completar⟩ |
+| Cero del panel (INA219) | Panel a oscuras | Promedio de 20 lecturas al arrancar | −0.105 y −0.115 mA (≈ 1 W/m²), restado de todas las lecturas |
+| BME280 (T, HR) | Termohigrómetro digital (±1 °C, ±5 % HR según su ficha) | Sonda junto a las rejillas del BME280, 5 a 10 min de estabilización y una lectura por minuto durante 5 min | ΔT = ⟨completar⟩ °C; ΔHR = ⟨completar⟩ pp. Consistentes si caen dentro de la exactitud de la referencia |
+| Buzzer (actuador) | Barrido de frecuencias, de 500 a 4000 Hz | Tono de 0.6 s por frecuencia, anotando cuáles suenan | Suena hasta **2000 Hz**; no suena desde 2500 Hz. El tono de crítico se ajustó de 2500 a 2000 Hz |
+
+> El termohigrómetro tiene una exactitud del mismo orden que la del BME280 (±1 °C y ±3 % HR según su datasheet [15]), así que la comparación es una **verificación de consistencia** contra un instrumento independiente, no una calibración formal.
+
+### 5.7.2 Verificación del modelo de evaporación
+
+En cada arranque, el firmware ejecuta pruebas de Priestley-Taylor contra valores de referencia calculados de forma independiente (en Python, con las mismas ecuaciones). Resultados en el ESP32 real:
+
+| Prueba | Esperado | Obtenido en el ESP32 | Resultado |
+|---|---|---|---|
+| Rs = 17 MJ/m², T = 14 °C (20/7), HR = 75 %, P = 75 kPa, Ra = 37.5 | Δ = 0.1038, γ = 0.0499, Δ/(Δ+γ) = 0.675, ea = 1.253, ET = 4.67 ± 0.05 mm/día | Δ = 0.1037, γ = 0.0499, f = 0.675, ea = 1.253, Rn = 13.46, ET = 4.675 | ✅ |
+| Mismo caso con Ra = 36 | ET = 4.61 ± 0.05 | Rn = 13.27, ET = 4.608 | ✅ |
+| Día despejado de referencia (Rs = Rso) | ET = ET_REF = 7.5 ± 0.05 | Rn = 20.80, ET = 7.483 | ✅ |
+| Oscuridad (Rs = 0) | Rn = 0, ET = 0, sin valores negativos | Rn = 0, ET = 0 | ✅ |
+| Ventana cubierta al 8 % | Sin estimación (CALCULANDO) | Sin estimación | ✅ |
+| Modo campo: ventana de 120 s y de 24 h con la misma luz | Mismo Rs equivalente (43.2 MJ/m²) | 43.20 y 43.20 | ✅ |
+| Modo demo: luz de mediodía despejado (G_pico = 1048.8 W/m²) y luz constante de 500 W/m² | Rs = Rso = 28.84 MJ/m²; con 500 W/m², Rs = 500/G_pico · Rso = 13.75 MJ/m² (± 0.1) | 28.84 y 13.75 MJ/m² (*) | ✅ (*) |
+
+(*) Esta prueba se agregó en el firmware v7 y su salida no quedó registrada del monitor serial del ESP32. El valor reportado se obtuvo ejecutando en un PC la misma lógica del firmware (llenado de los 24 *buckets* con 120 muestras de 1 s y cálculo del modo demo) en precisión `float` de 32 bits, como la del ESP32: 28.8432 y 13.7510 MJ/m², frente a 28.8432 y 13.7510 esperados. Al arrancar, el equipo ejecuta esta misma prueba e imprime el resultado en el monitor serial.
+
+Además se verificaron a mano lecturas reales del tablero (21.2 °C, HR 42.6 %, 75.1 kPa, sin luz): Δ/(Δ+γ) = 0.756 en el equipo frente a 0.754 calculado; ea = 1.08 kPa en ambos; índice evaporativo = 21.5 frente a 21.6; riesgo = 19.8 en ambos. Las diferencias son de redondeo.
+
+### 5.7.3 Emulación acelerada de condiciones reales
+
+| Condición emulada | Cómo | Observado |
+|---|---|---|
+| Descenso del nivel | Vaciado del tubo | Escalera NORMAL → PRECAUCIÓN → CRÍTICO en el LCD, los LEDs, el buzzer y el tablero, y vuelta a NORMAL al llenarlo |
+| Sol fuerte y aire seco | Equipo al sol (irradiancia medida de 831 W/m², 27.5 °C, 24.8 % HR, VPD 2.76 kPa) | Con el modo demo inicial el índice se saturaba en 100 (ver abajo); tras la corrección queda en ≈ 90 (Priestley-Taylor 60 + VPD 30) |
+| Calor sin luz | Secador sobre el BME280, panel a la sombra (44.7 °C, 16.1 % HR, VPD 6.65 kPa) | El índice se queda en 30: sin radiación, Priestley-Taylor da ET = 0 y solo aporta el componente de VPD, que ya está en su tope. Comportamiento esperado del método |
+| Sombra o nube | Tapar el panel | El índice baja a medida que la ventana se llena con la luz nueva (hasta 120 s en modo demo) |
+
+**Corrección encontrada en esta prueba.** En el modo demo inicial, la ventana de 120 s se extrapolaba a un día de 24 h con la misma luz. Con sol real, 831 W/m² equivalían a 72 MJ/m² "por día", 2.5 veces el máximo físico del sitio (28.8 MJ/m²), y la parte de Priestley-Taylor se saturaba siempre. Se cambió el modo demo para tratar la luz de la ventana como el mediodía de un día con esa nubosidad (índice de claridad, Sección 3.2.3). Con la regla nueva, un cielo parcialmente nublado (400 W/m², 21 °C, 50 % HR) pasa de un índice de ≈ 89 a ≈ 52, y el índice vuelve a distinguir días soleados de nublados.
+
+### 5.7.4 Validación de la fusión y de los umbrales
+
+| Caso | Condición | Estado esperado | Estado obtenido |
+|---|---|---|---|
+| F1 | Tubo lleno, sombra | NORMAL | ⟨completar⟩ |
+| F2 | Tubo lleno, sol fuerte y seco (índice ≥ 85) | **PRECAUCIÓN** (la evaporación sola no lleva a crítico) | ⟨completar⟩ |
+| F3 | Nivel ≈ 40 %, sombra | PRECAUCIÓN | ⟨completar⟩ |
+| F4 | Nivel ≈ 40 %, sol fuerte | CRÍTICO por riesgo combinado (≥ 69.2) | ⟨completar⟩ |
+| F5 | Nivel ≤ 15 % | CRÍTICO | ⟨completar⟩ |
+| F6 | Descenso rápido sostenido (≥ 68 pp/min) | CRÍTICO por tasa | ⟨completar⟩ |
+| F7 | Reposicionamiento brusco (> 8 pp en 1 s) | Sin alarma por tasa (discontinuidad) | ⟨completar⟩ |
+| F8 | Sensor de nivel desconectado | FALLO | ⟨completar⟩ |
+| F9 | Nivel justo en 50 % (borde de precaución) | PRECAUCIÓN (la regla es ≤ 50 %) | ⟨completar⟩ |
+| F10 | Nivel justo en 15 % (borde de crítico) | CRÍTICO (la regla es ≤ 15 %) | ⟨completar⟩ |
+| F11 | Recuperación: llenar el tubo desde CRÍTICO | CRÍTICO → PRECAUCIÓN → NORMAL, sin oscilar (3 ciclos de confirmación para bajar) | ⟨completar⟩ |
+| F12 | Alarma silenciada desde el tablero y el estado empeora | El silencio se cancela y el buzzer vuelve a sonar | ⟨completar⟩ |
+
+Falsos positivos observados: ⟨completar⟩. Falsos negativos observados: ⟨completar⟩.
+
+> El caso F2 motivó una regla nueva: antes del cambio, el equipo quedaba en CRÍTICO al sol con el tubo lleno (nivel 94 %, riesgo 33). Era un falso positivo, y desde entonces la evaporación sola llega como máximo a PRECAUCIÓN (Sección 3.2.6).
+
+### 5.7.5 Pruebas de la notificación
+
+| Prueba | Criterio | Resultado |
+|---|---|---|
+| Latencia de la alerta | Tiempo entre el cambio físico y el aviso en el tablero. Esperado ≤ ~5 s: confirmación del estado (2 ciclos de 1 s) + consulta del tablero (cada 2 s) | ⟨completar con cronómetro o con la antigüedad del evento⟩ |
+| Actualización del valor actual | El tablero muestra "dato de hace X s" | Valores observados de 0.1 a 0.4 s |
+| Actualización del histórico | Las gráficas se actualizan cada 5 s con un punto cada 2 s | ✅ observado |
+| Avisos | Cada cambio de estado muestra un aviso, suena y vibra | ✅ observado |
+| Desactivación de la alarma desde el tablero | El buzzer se calla 15 min, los LEDs siguen, queda un evento | ✅ observado |
+| Alarma física por estado | Tonos distintos en precaución (1000 Hz) y crítico (2000 Hz) | ✅ tras el ajuste a 2000 Hz |
+
+### 5.7.6 Robustez y casos límite
+
+| Prueba | Procedimiento | Resultado |
+|---|---|---|
+| Pérdida y reconexión de la WLAN | Apagar y volver a prender los datos o el hotspot con el tablero abierto | **Primera versión:** el tablero se quedaba en "Sin conexión" y, al recargar, la página no cargaba. **Tras la corrección** (cancelación de peticiones a los 4 s, reconexión sin cortar intentos en curso, Wi-Fi sin ahorro de energía y reinicio del servidor al volver la red), la alarma local siguió funcionando durante la caída y el tablero se recuperó solo al volver la red. En la prueba del tablero con red simulada, la recuperación tomó 1.2 s |
+| Recarga y apertura desde otro dispositivo tras la caída | Recargar, abrir desde un segundo celular o PC | ✅ tras la corrección |
+| Acceso con clave incorrecta | 5 intentos | ⟨completar⟩ (esperado: bloqueo de 30 s y evento por intento) |
+| Acceso desde fuera de la WLAN | Celular con datos móviles | ⟨completar⟩ (esperado: no llega al equipo) |
+| Valores fuera de rango | Distancia mayor que "vacío" o menor que "lleno" | El nivel se limita a 0 % o 100 % ⟨confirmar⟩ |
+| Sensor de nivel o BME280 ausente | Desconectar | ⟨completar⟩ (esperado: FALLO con los tres LEDs) |
+| Calibración inválida | Guardar "vacío" menor que "lleno" + 2 cm | El equipo la rechaza con el motivo en rojo y no cambia nada |
+| Persistencia de la calibración | Apagar y encender | ⟨completar⟩ (esperado: "Cargados de la flash" en el arranque) |
+
+### 5.7.7 Repetibilidad, precisión y desempeño
+
+| Prueba | Resultado |
+|---|---|
+| Repetición de la maniobra de vaciado (3 a 5 veces) | Tasa máxima: ⟨completar media ± desviación⟩; tiempo hasta CRÍTICO: ⟨completar⟩ |
+| Ruido del nivel en reposo (caracterización automática) | ⟨completar con el σ del tubo⟩ |
+| Consumo | Corriente de las pilas en NORMAL: ⟨completar⟩ mA; en CRÍTICO: ⟨completar⟩ mA |
+| Autonomía estimada | ⟨completar⟩ h con 4×AA (≈ ⟨completar⟩ mAh) |
 
 ---
 

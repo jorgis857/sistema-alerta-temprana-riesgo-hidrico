@@ -107,6 +107,8 @@ ALERTA LOCAL
 | 8 | [Uso de Inteligencia Artificial](wiki/08-Uso-de-IA.md) | Declaración de uso de IA |
 | 9 | [Equipo de trabajo](wiki/09-Equipo-Roles.md) | Roles, contribuciones, acta y autoevaluación |
 | 10 | [Executive Summary (English)](wiki/10-English-Executive-Summary.md) | Resumen ejecutivo en inglés |
+| 11 | [Conectividad IoT](wiki/11-Conectividad-IoT.md) | Actividad de refuerzo #2.3: red de nodos con MQTT |
+| 12 | [Mejoras respecto al Challenge #1](wiki/12-Mejoras-Challenge-1.md) | Retroalimentación del Challenge #1 y cómo se atendió |
 
 ---
 
@@ -128,7 +130,9 @@ sistema-alerta-temprana-riesgo-hidrico/
 │   ├── 07-Conclusiones-Trabajo-Futuro.md
 │   ├── 08-Uso-de-IA.md
 │   ├── 09-Equipo-Roles.md
-│   └── 10-English-Executive-Summary.md
+│   ├── 10-English-Executive-Summary.md
+│   ├── 11-Conectividad-IoT.md
+│   └── 12-Mejoras-Challenge-1.md
 │
 ├── firmware/
 │   ├── wrews/                  (abrir wrews.ino en Arduino IDE)
@@ -291,7 +295,7 @@ El guion utilizado durante la producción se encuentra en:
 
 ---
 
-## 👥 Equipo — Challenge #1, Equipo 1
+## 👥 Equipo 2
 
 | Integrante | Rol principal |
 |---|---|

@@ -18,6 +18,8 @@ Rather than relying on a single measurement, WREWS fuses these signals into a **
 - 🟡 **PRECAUTION**
 - 🔴 **CRITICAL**
 
+In **Challenge #2** the prototype became a **finished, enclosed, battery-powered device** that, in addition to the local alarm, hosts a **web dashboard** on an embedded web server inside the ESP32. The dashboard is reachable only from the local WLAN provided by the authorities and only after logging in. It shows current values and recent history, notifies every state change, lets authorities silence the physical alarm, and allows calibration without opening the enclosure. The evaporative index was replaced by **Priestley-Taylor potential evaporation with FAO-56 parameters**, and the weights and thresholds are now anchored to cited methods and regulations.
+
 ---
 
 ## System architecture
@@ -36,6 +38,8 @@ All sensing, processing, risk classification, and actuation are performed **loca
 
 Therefore, WREWS does not depend on Wi-Fi, cellular networks, cloud services, or any external communication infrastructure to generate an alert.
 
+Since Challenge #2, the firmware runs on three FreeRTOS threads: measurement on core 0, alarms on core 1, and the web server, Wi-Fi and LCD in the main loop. Two mutexes protect the shared state and the I²C bus. Because the alarms run in their own task, a slow browser or a WLAN outage cannot freeze the physical alarm.
+
 ---
 
 ## Data fusion
@@ -43,17 +47,19 @@ Therefore, WREWS does not depend on Wi-Fi, cellular networks, cloud services, or
 The water-risk model combines three components:
 
 ```text
-Water-level deficit              50 %
+Water-level deficit              54 %
 Evaporative conditions           30 %
-Level-decrease trend             20 %
+Level-decrease trend             16 %
 ```
+
+The weights are the priority vector obtained with Saaty's **Analytic Hierarchy Process** (consistency ratio 0.008); Challenge #1 used the rounded 50/30/20.
 
 Conceptually:
 
 ```text
 WATER LEVEL
      ↓
-LEVEL DEFICIT ─────────── 50 % ──┐
+LEVEL DEFICIT ─────────── 54 % ──┐
                                   │
 TEMPERATURE + HUMIDITY            │
      ↓                            │
@@ -65,10 +71,17 @@ EVAPORATIVE INDEX ─────── 30 % ───┤
                                   │
 LEVEL OVER TIME                   │
      ↓                            │
-DECREASE RATE ─────────── 20 % ───┘
+DECREASE RATE ─────────── 16 % ───┘
 ```
 
-The weighted index is complemented by **independent safety rules**, allowing an extreme individual condition to escalate the system state even when the weighted average has not yet reached the critical threshold.
+The weighted index is complemented by **independent safety rules**, allowing an extreme individual condition to escalate the system state even when the weighted average has not yet reached the critical threshold. The one exception, introduced in Challenge #2, is evaporation: on its own it can raise the state only up to PRECAUTION, because a sunny, dry noon with a full reservoir is not an emergency. It still feeds the combined risk with its weight, so a low level plus high evaporation does reach CRITICAL.
+
+| Variable | PRECAUTION | CRITICAL | Source |
+|---|---|---|---|
+| Level | ≤ 50 % | ≤ 15 % | Spanish Drought Management Plans (pre-alert 0.50, emergency 0.15) |
+| Evaporative index | ≥ 60 | ≥ 85 (severity only) | Assumption; to be closed with local climatological percentiles |
+| Decrease rate | ≥ 33 pp/min | ≥ 68 pp/min | Experimental calibration |
+| Combined risk | ≥ 36.2 | ≥ 69.2 | Derived from the level thresholds |
 
 ---
 
@@ -80,11 +93,15 @@ VPD provides an indicator of how favorable atmospheric conditions are for evapor
 
 The photovoltaic panel and INA219 provide an electrical signal related to the amount of radiation received. This signal is used as an **experimental estimate of solar irradiance**.
 
-VPD and estimated irradiance are then combined into an **evaporative-condition index**.
+In Challenge #2, the evaporative index is built on the **Priestley-Taylor** equation, λET = α·Δ/(Δ+γ)·(Rn − G), with net radiation, Δ and γ computed with **FAO-56**. The model runs over a moving window of measurements (24 h in field mode; in demo mode a short window whose average light is treated as the noon of a day with that cloudiness, using the clearness index). The resulting daily evaporation is normalized against a clear day at the site (7.5 mm/day) and combined with the window's VPD:
+
+```text
+Evaporative index = 70 · min(ET / 7.5, 1) + 30 · min(VPD / 2.0, 1)
+```
 
 This index does not represent the actual percentage of water evaporated. Instead, it indicates how favorable the environmental conditions are for evaporation.
 
-Atmospheric pressure is also measured by the BME280. It is not used as a risk indicator — in a fixed tropical station its variation is negligible and it does not respond to water scarcity. Instead, it acts as a **parameter of the evaporation model**: through the psychrometric constant, it determines the Penman partition between the radiative and aerodynamic terms. At the 2550 m altitude of Sabana Centro, this shifts the weighting towards evaporation by approximately 10 % relative to sea level. A model calibrated with sea-level parameters would underestimate local evaporative demand.
+Atmospheric pressure is also measured by the BME280. It is not used as a risk indicator — in a fixed tropical station its variation is negligible and it does not respond to water scarcity. Instead, it acts as a **parameter of the evaporation model**: through the psychrometric constant γ = 0.665·10⁻³·P, the measured pressure sets the Priestley-Taylor term Δ/(Δ+γ) directly, replacing the fixed altitude factor used in Challenge #1.
 
 ---
 
@@ -133,6 +150,20 @@ CRITICAL
 ```
 
 The **16×2 I²C LCD** provides local information about the system, while the LEDs make the current state immediately recognizable.
+
+---
+
+## Web dashboard (Challenge #2)
+
+The ESP32 joins the local WLAN in station mode and serves a dashboard with no external libraries or cloud services. It provides:
+
+- current values of all variables, color-coded by severity;
+- a 10-minute history chart for level, risk, evaporative index, decrease rate, temperature and irradiance, with dashed threshold lines;
+- an event log with on-screen, sound and vibration notifications for every state change;
+- a button to silence the buzzer for 15 minutes (the LEDs keep showing the state);
+- a calibration panel (tank full/empty distances, panel constant, rate thresholds, demo or field mode), stored in the ESP32 flash.
+
+Access requires both being on the same subnet as the device and an authenticated session (random 128-bit token in an HttpOnly cookie, lockout after 5 failed attempts). As a declared limitation, the dashboard uses HTTP without TLS.
 
 ---
 
@@ -192,6 +223,10 @@ RISK CLASSIFICATION
 LOCAL WARNING
 ```
 
+### Stage 3 — Challenge #2 test bench
+
+The finished device was tested outdoors in the sun, following the minimum blocks required by the brief: calibration against reference instruments, accelerated emulation (draining the tube, sun and shade on the panel, a hair dryer on the BME280), validation of the fusion logic and thresholds, notification tests (dashboard updates, alerts, silencing the alarm from the dashboard), and robustness tests (WLAN loss and reconnection, restricted access). An on-board self-test checks the evaporation model against independently computed reference values at every start-up. These tests revealed and fixed four real issues: saturation of the evaporative index in full sun, false CRITICAL alarms caused by evaporation alone with a full reservoir, a dashboard that did not recover after a WLAN outage, and a critical-alarm tone (2500 Hz) above the buzzer's usable range (now 2000 Hz).
+
 ### Experimental characterization
 
 Before fixing the trend-detection parameters, the ultrasonic sensor's noise was characterized experimentally: with the platform stationary, 20 measurements were taken and their standard deviation computed. From this, the standard error of a
@@ -208,6 +243,8 @@ WREWS demonstrates how a low-cost IoT system can combine **water level, environm
 The final result is a functional physical prototype capable of acquiring multiple variables, processing them locally on an ESP32, and translating the information into three clear warning states.
 
 The project demonstrates the complete transition from **sensing to decision and local actuation**, providing a functional proof of concept for an early water-risk warning system.
+
+In Challenge #2, WREWS evolved into an enclosed, battery-powered device with a secure local web dashboard, a physically based evaporation model, and weights and thresholds traceable to published methods and regulations.
 
 ---
 

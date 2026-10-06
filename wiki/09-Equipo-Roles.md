@@ -2,7 +2,7 @@
 
 # 9. Equipo de trabajo: roles, actividades y contribuciones
 
-## 9.1 Integrantes — Equipo 1
+## 9.1 Integrantes — Equipo 2
 
 | Integrante | Rol principal | Correo / contacto |
 |---|---|---|
@@ -140,6 +140,61 @@ WREWS
 ```
 
 El resultado final es un **prototipo físico funcional** capaz de adquirir múltiples variables, procesarlas localmente y generar una alerta temprana de riesgo hídrico mediante tres estados de fácil interpretación.
+
+---
+
+## 9.7 Contribuciones en el Challenge #2
+
+Roles definidos en la hoja de trabajo del Challenge #2:
+
+| Integrante | Rol | GitHub |
+|---|---|---|
+| **Mateo Ramírez Cabrera** | Hardware, integración en carcasa, alimentación, montaje y edición de video | [technologybyteo](https://github.com/technologybyteo) |
+| **Antonio Benítez Rueda** | Firmware: FreeRTOS, fusión, servidor web y tablero | [antobeni07](https://github.com/antobeni07) |
+| **Jorge Andrés Rodríguez Huertas** | Banco de pruebas, calibración, Wiki, video y gestión (actas) | [jorgis857](https://github.com/jorgis857) |
+
+### Mateo Ramírez Cabrera — Hardware, carcasa e integración
+
+- Diseño de la carcasa en CadQuery (iteraciones v11 a v17) y su impresión en PETG: caja, tapa, piso intermedio, techo ventilado del BME280 y acople al tubo de PVC.
+- Integración de los componentes en la carcasa y del sensor de nivel en el tubo de PVC.
+- Diseño de la alimentación por pilas con interruptor y distribución de las filas de 5 V y 3.3 V.
+- Edición del video de demostración.
+- ⟨completar⟩
+
+### Antonio Benítez Rueda — Firmware, modelo y tablero de control
+
+- Firmware v6: modelo de evaporación de Priestley-Taylor con FAO-56, ventana móvil, pesos AHP, nuevos umbrales y autotest de referencia.
+- Firmware v7: tareas de FreeRTOS con mutex, Wi-Fi en modo estación con reconexión y dos redes, servidor web embebido, inicio de sesión, tablero con histórico, eventos y silencio de la alarma, y calibración desde el tablero guardada en flash.
+- Diagnóstico y corrección de las fallas encontradas en las pruebas (tono del buzzer, recuperación del tablero, saturación del índice con sol, falsos positivos por evaporación).
+- Hojas de referencias del modelo de evaporación y de pesos y umbrales ⟨confirmar autoría⟩.
+- ⟨completar⟩
+
+### Jorge Andrés Rodríguez Huertas — Pruebas, documentación y video
+
+- Diseño y ejecución del banco de pruebas y de la calibración de sensores del Challenge #2.
+- Actualización de la Wiki.
+- Participación en el video de demostración.
+- Gestión del proyecto y actas de reunión.
+- ⟨completar⟩
+
+### Acta de reunión del Challenge #2
+
+| Campo | Detalle |
+|---|---|
+| **Proyecto** | WREWS — Water Risk Early Warning System — Challenge #2 |
+| **Fecha de la reunión** | ⟨completar⟩ |
+| **Asistentes** | ⟨completar⟩ |
+| **Modalidad** | ⟨completar⟩ |
+| **Temas tratados** | ⟨completar: p. ej. retroalimentación del Challenge #1, decisiones de pesos y umbrales, arquitectura del tablero, pruebas y video⟩ |
+| **Compromisos y cumplimiento** | ⟨completar⟩ |
+
+### Autoevaluación de la contribución individual (Challenge #2)
+
+| Integrante | Nivel autoevaluado | Justificación breve |
+|---|---|---|
+| Mateo Ramírez Cabrera | ⟨completar⟩ | ⟨completar⟩ |
+| Antonio Benítez Rueda | ⟨completar⟩ | ⟨completar⟩ |
+| Jorge Andrés Rodríguez Huertas | ⟨completar⟩ | ⟨completar⟩ |
 
 ---
 
