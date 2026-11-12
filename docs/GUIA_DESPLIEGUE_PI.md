@@ -55,7 +55,9 @@ Lo que está entre `CAMBIAR_...` o `192.168.X.X` se reemplaza con los datos real
 ```bash
 sudo apt-get update && sudo apt-get install -y git
 git clone https://github.com/jorgis857/sistema-alerta-temprana-riesgo-hidrico.git
-cd sistema-alerta-temprana-riesgo-hidrico/gateway
+cd sistema-alerta-temprana-riesgo-hidrico
+git checkout challenge3-sistema      # mientras no se una a main
+cd gateway
 ```
 
 **Opción B: todavía no se ha publicado.** Se copia desde el PC que tiene el repositorio, por la misma red:

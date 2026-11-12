@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Instala el gateway WREWS en una Raspberry Pi (Raspberry Pi OS / Debian).
 # Uso, desde la carpeta gateway/ del repo:   sudo ./instalar.sh
+# (o, sin preguntas:  sudo CLAVE_ESP32=... CLAVE_GATEWAY=... CLAVE_MONITOR=... ./instalar.sh)
 # Se puede correr de nuevo sin problema: no borra datos ni claves existentes.
 set -euo pipefail
 
@@ -30,12 +31,26 @@ echo "== 4/6 Mosquitto con usuario y clave"
 cp "$AQUI/mosquitto/wrews.conf" /etc/mosquitto/conf.d/wrews.conf
 cp "$AQUI/mosquitto/wrews.acl"  /etc/mosquitto/wrews.acl
 PW=/etc/mosquitto/wrews.passwd
+# Las claves se pueden pasar en el comando para no escribirlas a mano:
+#   sudo CLAVE_ESP32=... CLAVE_GATEWAY=... CLAVE_MONITOR=... ./instalar.sh
 nueva_clave() {   # usuario
+  local var="CLAVE_$(echo "$1" | tr '[:lower:]' '[:upper:]')"
+  local clave="${!var:-}"
+  local crear=""
+  [[ -f $PW ]] || crear="-c"
   if [[ -f $PW ]] && grep -q "^$1:" "$PW"; then
-    echo "   usuario '$1' ya existe (no se cambia; para cambiarlo: sudo mosquitto_passwd $PW $1)"
+    if [[ -n $clave ]]; then
+      mosquitto_passwd -b "$PW" "$1" "$clave"
+      echo "   usuario '$1': clave actualizada"
+    else
+      echo "   usuario '$1' ya existe (no se cambia; para cambiarlo: sudo mosquitto_passwd $PW $1)"
+    fi
+  elif [[ -n $clave ]]; then
+    mosquitto_passwd $crear -b "$PW" "$1" "$clave"
+    echo "   usuario '$1' creado"
   else
     echo "   Clave para el usuario MQTT '$1' (se pide dos veces, no se ve al escribir):"
-    if [[ -f $PW ]]; then mosquitto_passwd "$PW" "$1"; else mosquitto_passwd -c "$PW" "$1"; fi
+    mosquitto_passwd $crear "$PW" "$1"
   fi
 }
 nueva_clave esp32

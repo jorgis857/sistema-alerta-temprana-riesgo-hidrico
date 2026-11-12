@@ -12,75 +12,58 @@ En la U solo falta **cambiar el Mac por la Raspberry Pi** y **grabar**.
 
 ---
 
-## 1. Qué llevar
+## 1. Qué llevar (todo quedó preparado la noche anterior)
 
-- [ ] Raspberry Pi con su fuente y la microSD con **Raspberry Pi OS** (SSH activado y usuario creado en Raspberry Pi Imager).
-- [ ] El prototipo WREWS y su **cable USB de datos**.
-- [ ] El Mac con el repo (tiene arduino-cli, el core del ESP32 y las librerías ya instaladas).
-- [ ] Un celular para el **hotspot** (2.4 GHz y con datos) y otro para **grabar**.
-- [ ] Anotado: token de Ubidots, clave de Anthropic (están en `gateway/gateway.env` del Mac) y la cuenta de Ubidots abierta en el navegador.
+- [ ] **La microSD ya grabada** (la prepara Jorge con `GUIA_MICROSD_JORGE`): hostname `wrews-gw`, usuario `equipo2`, Wi-Fi `WREWS-Hotspot` y SSH activado. **La Raspberry Pi la presta la universidad**: confirmar que venga con su fuente (Pi 4: USB-C de 3 A).
+- [ ] **El prototipo WREWS** y su **cable USB de datos**. El ESP32 ya tiene el firmware para la U: busca `WREWS-Hotspot` y `wrews-gw.local`.
+- [ ] **El Mac de Mateo** con la carpeta **`~/Downloads/WREWS-kit-U`**. Trae el `gateway.env` de la Pi ya lleno con todas las claves, el script `instalar_en_pi.sh` y las guías de la microSD. También tiene Raspberry Pi Imager y arduino-cli, por si hay que regrabar algo.
+- [ ] **Un celular para el hotspot**, con datos, y **otro para grabar**.
+- [ ] La cuenta de Ubidots abierta en el navegador y Telegram en el celular del administrador.
 - [ ] Un cartón o la mano para mover el nivel frente al ultrasónico (lleno = 30 cm, vacío = 40,3 cm).
 
-## 2. Montaje en la U (unos 45 min)
+## 2. Montaje en la U (unos 20 min)
 
-### 2.1 Red
-1. Prender el hotspot.
-   - **iPhone:** *Compartir Internet* → activar **Maximizar compatibilidad** (eso lo deja en 2.4 GHz).
-   - **Android:** banda **2.4 GHz**.
-2. Conectar a ese hotspot **el Mac, la Pi y luego el ESP32**.
+### 2.1 Hotspot
+Quien preste el celular le pone al hotspot **el nombre `WREWS-Hotspot` y la clave acordada** (está en la guía de la microSD). En **iPhone**, el nombre del hotspot es el nombre del teléfono (*Ajustes → General → Información → Nombre*) y hay que activar **Maximizar compatibilidad**; en **Android**, la banda va en **2.4 GHz**. Conectar el Mac a ese hotspot.
 
-### 2.2 Raspberry Pi
-Desde el Mac, conectado al hotspot:
-```bash
-ssh USUARIO@raspberrypi.local          # o con la IP que muestre el hotspot
-hostname -I                            # ANOTAR la IP de la Pi: ________________
-# Nombre UNICO para la Pi: en la U puede haber varias "raspberrypi" en la red
-sudo hostnamectl set-hostname wrews-gw && sudo reboot
-# a partir de aqui la Pi es wrews-gw.local:  ssh USUARIO@wrews-gw.local
-timedatectl                            # debe decir "System clock synchronized: yes"
-exit
-```
-Copiar el código. El repo no está publicado todavía, así que se copia directo desde el Mac:
-```bash
-cd ~/sistema-alerta-temprana-riesgo-hidrico
-scp -r gateway docs USUARIO@wrews-gw.local:~/wrews/
-ssh USUARIO@wrews-gw.local
-cd ~/wrews/gateway && rm -f gateway.env *.db && chmod +x instalar.sh
-sudo ./instalar.sh
-```
-`instalar.sh` pide tres claves MQTT. **Anótenlas:**
-- `esp32` = ____________
-- `gateway` = ____________
-- `monitor` = ____________
+### 2.2 Raspberry Pi: un solo comando
+1. Meter la microSD en la Pi de la U y conectarla a la corriente. Esperar **2 a 3 minutos**: en el celular debe aparecer `wrews-gw` como conectado.
+2. Desde el Mac:
+   ```bash
+   scp -r ~/Downloads/WREWS-kit-U equipo2@wrews-gw.local:~/
+   ssh -t equipo2@wrews-gw.local 'bash ~/WREWS-kit-U/instalar_en_pi.sh'
+   ```
+   Pide la clave del usuario `equipo2` dos o tres veces: es la de la guía de la microSD. El script:
+   - baja el código de GitHub (rama `challenge3-sistema`);
+   - copia el `gateway.env` ya lleno;
+   - instala Mosquitto con los usuarios y permisos, sin preguntar las claves;
+   - arranca el servicio y hace las comprobaciones.
 
-Configurar el gateway:
-```bash
-sudo nano /etc/wrews/gateway.env
-#   MQTT_PASS=<la clave de "gateway" que pidio instalar.sh>  (NO la del Mac)
-#   Y copiar TAL CUAL del gateway/gateway.env del Mac estas lineas:
-#     UBIDOTS_TOKEN, UBIDOTS_TABLERO_URL, ANTHROPIC_API_KEY,
-#     TELEGRAM_TOKEN, TELEGRAM_ADMIN, TELEGRAM_CLAVE
-sudo bash -c 'set -a; . /etc/wrews/gateway.env; cd /opt/wrews/gateway; /opt/wrews/venv/bin/python -m wrews_gw.ia --probar'
-sudo systemctl restart wrews-gateway
-journalctl -u wrews-gateway -f     # "Broker local: conectado" y "Ubidots: conectado"
-```
+   Tarda **5 a 10 min**.
+3. Al final debe mostrar:
+   - `not authorised` (el broker rechaza a quien no tiene clave);
+   - `Proveedor: claude` (la IA funciona);
+   - `Broker local: conectado` y `Ubidots: conectado`.
 
-### 2.3 ESP32
-Desde el Mac, con el ESP32 conectado por USB:
+**Si algo falla:**
+- **`wrews-gw` no aparece en el hotspot:** revisar que el nombre y la clave del hotspot sean exactos y que esté en 2.4 GHz.
+- **La Pi de la U es un modelo viejo** (Pi 2 o anterior) y no arranca: regrabar la microSD en el Mac con *Raspberry Pi Imager* (ya instalado), con los mismos ajustes de la guía, eligiendo **Raspberry Pi OS Lite (32-bit)**.
+- **`Could not resolve hostname`:** usar la IP de la Pi que muestra el celular, en vez de `wrews-gw.local`.
+
+### 2.3 ESP32: ya está listo
+Solo conectarlo a la corriente o al USB. En unos 30 s se une a `WREWS-Hotspot` y encuentra `wrews-gw.local` solo. Para ver que se conectó: en la Pi, `journalctl -u wrews-gateway -f` muestra `Evento ESP32: Gateway MQTT conectado`. La IP del tablero local aparece en el LCD (anotarla: ____________).
+
+Si hubiera que regrabar el ESP32, desde el Mac:
 ```bash
 cd ~/sistema-alerta-temprana-riesgo-hidrico
-open -e firmware/wrews/secrets.h
-#   WIFI_SSID / WIFI_PASS -> los del hotspot
-#   MQTT_HOST -> "wrews-gw.local" (el nombre unico que se le puso a la Pi);
-#                si el hotspot no deja resolver nombres, usar la IP de la Pi
-#   MQTT_PASS -> la clave de esp32 que pidió instalar.sh
-arduino-cli compile --fqbn esp32:esp32:esp32 firmware/wrews
-arduino-cli upload  --fqbn esp32:esp32:esp32 -p /dev/cu.usbserial-0001 firmware/wrews
-arduino-cli monitor -p /dev/cu.usbserial-0001 -c baudrate=115200   # salir con Ctrl+C
+arduino-cli upload --fqbn esp32:esp32:esp32 -p /dev/cu.usbserial-0001 firmware/wrews
 ```
-En el monitor debe aparecer `Wi-Fi: conectado`, la **IP del tablero** (anotarla: ____________) y `MQTT: conectado`.
+El puerto puede cambiar; se averigua con `arduino-cli board list`.
 
-> El puerto (`/dev/cu.usbserial-0001`) puede cambiar en otro Mac o en otro puerto USB. Se averigua con `arduino-cli board list`.
+### 2.3.1 Telegram
+- El administrador (Mateo) le escribe `/start` al bot, porque la base de datos de la Pi empieza vacía.
+- Jorge y Antonio abren el enlace con la clave de registro y Mateo los aprueba con el botón **✅ Aprobar**.
+- **El gateway del Mac debe estar apagado** (cerrar la sesión de Claude Code): Telegram deja un solo lector por bot.
 
 ### 2.4 Comprobar antes de grabar (5 min)
 - [ ] Tablero local (`http://IP-del-ESP32`, usuario `alcaldia`, clave `wrews-2026`): datos en vivo, «Gateway MQTT: conectado» y la tarjeta de IA con texto.
