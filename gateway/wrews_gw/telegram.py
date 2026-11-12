@@ -58,6 +58,7 @@ ACCION = {
 MAX_INTENTOS_CLAVE = 5
 VIVO_CADA_S = 60          # cada cuanto se actualiza el dashboard en vivo
 BLOQUEO_CLAVE_S = 600
+MENSAJE_VIGENTE_S = 600   # mensajes mas viejos (gateway apagado) se ignoran
 BIENVENIDA = ("✅ Acceso aprobado: quedaste suscrito a las alertas de WREWS (sistema de alerta temprana "
               "de riesgo hídrico).\nTe aviso cada vez que cambie el estado del reservorio, "
               "con una recomendación.\n\n/estado  ver el estado actual\n"
@@ -283,8 +284,12 @@ class Telegram:
                     offset = u["update_id"] + 1
                     if "callback_query" in u:
                         self._atender_boton(u["callback_query"])
-                    else:
-                        self._atender(u.get("message") or {})
+                        continue
+                    msg = u.get("message") or {}
+                    # Lo que escribieron con el gateway apagado no se contesta tarde.
+                    if time.time() - msg.get("date", 0) > MENSAJE_VIGENTE_S:
+                        continue
+                    self._atender(msg)
             except (requests.RequestException, ValueError) as e:
                 log.debug("Telegram getUpdates sin conexion: %s", e)
                 time.sleep(10)
