@@ -19,3 +19,18 @@
 // Usuario y clave del tablero de control
 #define WEB_USER  "alcaldia"
 #define WEB_PASS  "cambie-esta-clave"
+
+// ---- MQTT hacia el gateway (Challenge 3) ---------------------------------
+// Gateway dentro de la MISMA red Wi-Fi. Puede ser su nombre en la red
+// ("wrews-gw.local": conviene un nombre unico, ver docs/DIA_U_Y_VIDEO.md):
+// asi el ESP32 lo encuentra aunque el hotspot le cambie la IP. Tambien sirve
+// la IP fija (en la Pi: hostname -I), si el hotspot bloquea el mDNS.
+// Usuario y clave son los que se crearon con mosquitto_passwd para el ESP32
+// (ver docs/GUIA_DESPLIEGUE_PI.md, paso 3). Si borra MQTT_HOST, el equipo
+// funciona como la v7, sin MQTT.
+#define MQTT_HOST "wrews-gw.local"
+#define MQTT_PORT 1883
+#define MQTT_USER "esp32"
+#define MQTT_PASS "clave-del-esp32-en-mosquitto"
+// Identificador del equipo: va en los topicos (wrews/<DEVICE_ID>/...)
+#define DEVICE_ID "wrews-01"

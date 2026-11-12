@@ -1,7 +1,11 @@
 // ============================================================================
 //  WREWS - Water Risk Early Warning System
-//  Firmware del prototipo funcional  ·  v7
-//  Challenge #2 - Internet de las Cosas - Universidad de La Sabana - 2026-2
+//  Firmware del prototipo funcional  ·  v8
+//  Challenge #3 - Internet de las Cosas - Universidad de La Sabana - 2026-2
+//  v8: cliente MQTT en su propia tarea de FreeRTOS. Publica telemetria,
+//      estado y eventos al gateway (Raspberry Pi + Mosquitto) y recibe
+//      comandos (silenciar la alarma desde Ubidots) y la recomendacion
+//      del modulo de IA, que se muestra en el tablero local.
 //  v7: tablero de control web en la WLAN (servidor embebido, sesiones,
 //      historial y eventos) y medicion en su propia tarea de FreeRTOS.
 //  v6: el indice evaporativo pasa a ser evaporacion potencial diaria con
@@ -13,8 +17,8 @@
 //  de la red. Ademas publica un tablero de control web dentro de la WLAN de
 //  la zona (valor actual, historico, eventos y silencio de la alarma).
 //
-//  ARCHIVOS: wrews.ino (este), tablero.h (paginas web), secrets.h (red y
-//  clave del tablero; no se sube, ver secrets.example.h).
+//  ARCHIVOS: wrews.ino (este), tablero.h (paginas web), secrets.h (red,
+//  clave del tablero y broker MQTT; no se sube, ver secrets.example.h).
 //
 //  PARAMETROS DEL BANCO DE PRUEBAS
 //  Las constantes de tiempo y las escalas de tasa corresponden a la maqueta
@@ -37,7 +41,8 @@
 //  "Supuesto" marca los valores sin fuente directa, declarados en la wiki.
 //
 //  Librerias: Adafruit BME280 / Adafruit Unified Sensor / Adafruit INA219 /
-//             LiquidCrystal I2C (Frank de Brabander)
+//             LiquidCrystal I2C (Frank de Brabander) /
+//             PubSubClient (Nick O'Leary) para MQTT
 // ============================================================================
 
 #include <Wire.h>
@@ -51,6 +56,7 @@
 #include <ESPmDNS.h>
 #include <Preferences.h>
 #include <stdarg.h>
+#include <PubSubClient.h>
 #include "tablero.h"
 
 // Red y usuario del tablero. secrets.h NO se sube al repositorio: se crea
@@ -215,6 +221,16 @@ const bool  BANDA_AUTO   = true;
 const float BANDA_MANUAL = 5.0;   // pp/min
 float BANDA_MUERTA       = 5.0;
 
+// Plausibilidad del BME280 (v8). Un contacto flojo en SDA/SCL corrompe bytes
+// del bus I2C y la compensacion de Bosch los convierte en valores absurdos
+// (se vieron 127 y 180 C, y presiones negativas). Una lectura fuera de estos
+// rangos fisicos se descarta: no entra al indice evaporativo y se conservan
+// los ultimos valores validos. BME_MALAS_FALLO lecturas malas SEGUIDAS (1 por
+// segundo) se tratan como sensor danado: estado FALLO.
+const float BME_T_MIN = -10.0, BME_T_MAX = 60.0;     // C
+const float BME_P_MIN = 500.0, BME_P_MAX = 1100.0;   // hPa
+const uint8_t BME_MALAS_FALLO = 5;
+
 // ===========================================================================
 //  OBJETOS Y ESTADO
 // ===========================================================================
@@ -231,6 +247,8 @@ float corriente_ma = NAN, irradiancia = 0;
 float idx_evap = 0, tasa_ppm = 0, riesgo = 0, tasa_max = 0;
 float ruido_dist_cm = 0, ruido_nivel_pp = 0;
 bool  ultra_ok = false;
+uint8_t bme_malas = 0;           // lecturas imposibles seguidas del BME280
+uint32_t bme_descartadas = 0;    // total desde el arranque (tablero)
 
 uint8_t s_nivel = 0, s_evap = 0, s_tasa = 0, s_riesgo = 0;  // severidades 0/1/2
 
@@ -367,8 +385,10 @@ const uint8_t MAX_FALLOS_LOGIN = 5;
 const unsigned long BLOQUEO_LOGIN_MS = 30000;
 
 // ---- Concurrencia -------------------------------------------------------
-// Tres hilos (requisito del Challenge 2: medir fuera del hilo principal):
+// Cuatro hilos (requisito del Challenge 2: medir fuera del hilo principal;
+// del Challenge 3: la comunicacion MQTT tambien en su propio hilo):
 //   tareaMedicion  nucleo 0  sensores, modelo, estado, historial
+//   tareaMqtt      nucleo 0  cliente MQTT: publica y recibe comandos (v8)
 //   tareaAlarmas   nucleo 1  LEDs y buzzer cada 10 ms
 //   loop()         nucleo 1  servidor web, Wi-Fi y LCD
 // Las alarmas van aparte del servidor a proposito: un cliente lento o una
@@ -377,6 +397,8 @@ const unsigned long BLOQUEO_LOGIN_MS = 30000;
 //              de red y sesiones, que solo toca loop()).
 //   mtx_i2c    protege el bus I2C (LCD, BME280 e INA219 lo comparten).
 // Orden fijo para no bloquearse: nunca tomar mtx_i2c teniendo mtx_estado.
+// tareaMqtt solo toma mtx_estado (nunca mtx_i2c) y nunca lo tiene tomado
+// mientras usa la red: conectarse o publicar puede tardar segundos.
 // Ninguna ISR: el I2C y la coma flotante no deben ir dentro de una ISR.
 SemaphoreHandle_t mtx_estado = NULL, mtx_i2c = NULL;
 TaskHandle_t      tarea_medicion = NULL, tarea_alarmas = NULL;
@@ -385,6 +407,52 @@ const uint32_t    PILA_ALARMAS   = 4096;
 const UBaseType_t PRIO_MEDICION  = 2;      // por encima de loop() (1)
 const UBaseType_t PRIO_ALARMAS   = 2;
 const BaseType_t  NUCLEO_MEDICION = 0, NUCLEO_ALARMAS = 1;
+
+// ---- MQTT hacia el gateway (Challenge 3) ---------------------------------
+// Cuarto hilo: tareaMqtt (nucleo 0, prioridad 1, por debajo de la medicion).
+// Conectarse al broker puede bloquear varios segundos; en su propia tarea eso
+// no frena ni la medicion, ni la alarma, ni el tablero local.
+// Topicos (DEVICE_ID = wrews-01 por defecto):
+//   wrews/<id>/telemetria      ESP32 -> gw  JSON cada 5 s
+//   wrews/<id>/estado          ESP32 -> gw  JSON al cambiar (retenido)
+//   wrews/<id>/eventos         ESP32 -> gw  JSON por cada evento del registro
+//   wrews/<id>/disponibilidad  ESP32 -> gw  "online" / "offline" (LWT, retenido)
+//   wrews/<id>/cmd             gw -> ESP32  {"accion":"silenciar","origen":"..."}
+//   wrews/<id>/cmd/resp        ESP32 -> gw  respuesta al comando
+//   wrews/<id>/ia/texto        gw -> ESP32  recomendacion de la IA (texto plano)
+// Si secrets.h no define MQTT_HOST el equipo funciona igual que la v7.
+#ifndef MQTT_PORT
+#define MQTT_PORT 1883
+#endif
+#ifndef DEVICE_ID
+#define DEVICE_ID "wrews-01"
+#endif
+const unsigned long MQTT_TELEMETRIA_MS = 5000;   // una muestra de cada 5
+const unsigned long MQTT_REINTENTO_MS  = 5000;
+const uint16_t      MQTT_BUFFER        = 1024;   // la recomendacion de la IA ocupa <= 380 B
+const uint32_t      PILA_MQTT          = 8192;
+const UBaseType_t   PRIO_MQTT          = 1;
+const BaseType_t    NUCLEO_MQTT        = 0;
+TaskHandle_t tarea_mqtt = NULL;
+WiFiClient   cliente_tcp;
+PubSubClient mqtt(cliente_tcp);               // solo la usa tareaMqtt
+char top_tel[48], top_est[48], top_ev[48], top_disp[48], top_cmd[48],
+     top_resp[48], top_ia[48];
+uint32_t boot_id = 0;                         // distingue reinicios en el gateway
+// MQTT_HOST puede ser una IP ("192.168.1.7") o un nombre de la red local
+// ("raspberrypi.local"). Con un nombre, loop() lo busca por mDNS y vuelve a
+// buscarlo si la conexion falla: asi el ESP32 sigue al gateway aunque el
+// hotspot le cambie la IP. La busqueda va en loop() porque es el hilo que
+// reinicia el mDNS cuando vuelve el Wi-Fi.
+bool     mqtt_por_nombre = false;
+char     mqtt_nombre_mdns[48] = "";           // MQTT_HOST sin ".local"
+volatile bool mqtt_pide_resolver = true;      // tareaMqtt lo pide, loop() lo hace
+// Compartidas con loop() (tablero); se leen y escriben con mtx_estado
+uint32_t mqtt_ip = 0;                         // IP resuelta del broker (0 = no se sabe)
+bool     mqtt_ok = false;
+uint16_t mqtt_reconexiones = 0;
+char     ia_texto[400] = "";
+unsigned long ia_t_ms = 0;
 
 void bloquear(SemaphoreHandle_t m) { xSemaphoreTake(m, portMAX_DELAY); }
 void liberar(SemaphoreHandle_t m)  { xSemaphoreGive(m); }
@@ -699,6 +767,14 @@ void tomarMuestra() {
   liberar(mtx_estado);
 }
 
+// Lectura del BME280 dentro de rangos fisicamente posibles
+bool lecturaBmeValida(float t, float h, float p) {
+  return !isnan(t) && !isnan(h) && !isnan(p) &&
+         t >= BME_T_MIN && t <= BME_T_MAX &&
+         h >= 0.0 && h <= 100.0 &&
+         p >= BME_P_MIN && p <= BME_P_MAX;
+}
+
 // Todo lo que sigue escribe estado compartido: se llama con mtx_estado tomado.
 void actualizarModelo(float d, float t, float h, float p, float i_ma) {
   t_ultima_muestra = millis();
@@ -731,11 +807,22 @@ void actualizarModelo(float d, float t, float h, float p, float i_ma) {
   tasa_ppm = calcularTasa();
   if (tasa_ppm > tasa_max) tasa_max = tasa_ppm;
 
-  if (hay_bme) {
+  bool bme_valida = hay_bme && lecturaBmeValida(t, h, p);
+  if (bme_valida) {
+    if (bme_malas >= BME_MALAS_FALLO) registrarEvento(0, "BME280 recuperado");
+    bme_malas = 0;
     temp_c   = t;
     hum_pct  = h;
     pres_hpa = p;
     vpd_kpa  = calcVPD(temp_c, hum_pct);
+  } else if (hay_bme) {
+    // Se descarta y se conservan los ultimos valores validos
+    bme_descartadas++;
+    Serial.printf(">>> BME280: lectura imposible descartada (%.1f C, %.1f %%, %.1f hPa)\n",
+                  t, h, p);
+    if (bme_malas < 255) bme_malas++;
+    if (bme_malas == BME_MALAS_FALLO)
+      registrarEvento(2, "BME280 con lecturas imposibles: revisar conexion");
   } else temp_c = hum_pct = pres_hpa = vpd_kpa = NAN;
 
   if (hay_ina) {
@@ -753,7 +840,7 @@ void actualizarModelo(float d, float t, float h, float p, float i_ma) {
     dt_s = (ahora - t_evap_prev) / 1000.0;
   t_evap_prev = ahora;
 
-  if (hay_bme && !isnan(temp_c) && !isnan(hum_pct) && !isnan(pres_hpa))
+  if (bme_valida)
     ventanaAcumular(ventana_evap, irradiancia, temp_c, hum_pct,
                     pres_hpa / 10.0, dt_s);
 
@@ -784,7 +871,7 @@ uint8_t severidad(float v, float u_prec, float u_crit, bool invertido) {
 // dispara por si sola aunque el promedio no llegue, y el promedio dispara
 // cuando ninguna variable esta mal por separado pero todas juntas si.
 uint8_t calcularObjetivo() {
-  if (!ultra_ok || !hay_bme) return EST_FALLO;
+  if (!ultra_ok || !hay_bme || bme_malas >= BME_MALAS_FALLO) return EST_FALLO;
 
   s_nivel  = severidad(nivel_pct, U_PREC_NIVEL,  U_CRIT_NIVEL,  true);
   // Sin estimacion valida el indice evaporativo no dispara reglas
@@ -1193,7 +1280,7 @@ void numTxt(char *buf, size_t n, float v, uint8_t dec) {
 void apiActual() {
   if (!autorizado()) { responderNoAutorizado(); return; }
   String s;
-  s.reserve(1400);
+  s.reserve(2000);
   s = "{";
   unsigned long ahora = millis();
   bloquear(mtx_estado);
@@ -1234,6 +1321,11 @@ void apiActual() {
   jsonTxt(s, "estado_evap", NOMBRE_EVAP[estado_evap]);
   jsonTxt(s, "modo", MODO_DEMO ? "DEMO" : "CAMPO");
   jsonEnt(s, "ultimo_evento", ev_sig - 1);
+  jsonEnt(s, "bme_descartadas", bme_descartadas);
+  jsonEnt(s, "mqtt_ok", mqtt_ok ? 1 : 0);
+  jsonEnt(s, "mqtt_reconexiones", mqtt_reconexiones);
+  jsonTxt(s, "ia_texto", ia_texto);
+  jsonEnt(s, "ia_edad_s", ia_t_ms ? (long)((ahora - ia_t_ms) / 1000) : -1);
   liberar(mtx_estado);
   jsonEnt(s, "rssi", WiFi.RSSI());
   jsonTxt(s, "red", WiFi.SSID().c_str());
@@ -1716,10 +1808,324 @@ bool autotestPT() {
   return ok;
 }
 
+// ===========================================================================
+//  MQTT HACIA EL GATEWAY  (v8, Challenge 3)
+//  Todo lo de esta seccion corre en tareaMqtt, menos iniciarMqtt (setup).
+//  La libreria PubSubClient no es segura entre hilos: solo esta tarea la usa.
+//  El estado compartido se copia bajo mtx_estado y se publica sin el.
+// ===========================================================================
+#ifdef MQTT_HOST
+void tareaMqtt(void *param);
+
+// Copia texto apto para JSON: sin comillas, barras ni caracteres de control.
+// Si no cabe, corta sin partir un caracter UTF-8 (tildes) a la mitad.
+void copiarLimpio(char *dst, size_t n, const char *src, size_t len) {
+  size_t j = 0;
+  for (size_t i = 0; i < len && j + 1 < n; i++) {
+    char c = src[i];
+    if ((uint8_t)c < 0x20) c = ' ';
+    if (c == '"' || c == '\\') c = '\'';
+    dst[j++] = c;
+  }
+  if (j < len) {                                   // se corto: quitar el ultimo caracter
+    while (j > 0 && ((uint8_t)dst[j - 1] & 0xC0) == 0x80) j--;   // bytes de continuacion
+    if (j > 0 && ((uint8_t)dst[j - 1] & 0xC0) == 0xC0) j--;      // byte inicial
+  }
+  dst[j] = 0;
+}
+
+// Valor de "clave":"texto" dentro de un JSON plano y corto (sin librerias).
+// json ya termina en 0. Deja "" si no esta.
+void campoJson(const char *json, const char *clave, char *out, size_t n) {
+  out[0] = 0;
+  char patron[24];
+  snprintf(patron, sizeof(patron), "\"%s\"", clave);
+  const char *k = strstr(json, patron);
+  if (!k) return;
+  k = strchr(k + strlen(patron), ':');
+  if (!k) return;
+  k = strchr(k, '"');
+  if (!k) return;
+  const char *f = strchr(k + 1, '"');
+  if (!f) return;
+  copiarLimpio(out, n, k + 1, f - k - 1);
+}
+
+// Llega un mensaje del gateway (corre dentro de mqtt.loop(), en tareaMqtt).
+// Ojo: topico y datos apuntan al buffer interno de PubSubClient; todo lo que
+// se necesite se copia ANTES de publicar la respuesta, que lo sobrescribe.
+void alRecibirMqtt(char *topico, byte *datos, unsigned int len) {
+  if (strcmp(topico, top_ia) == 0) {
+    bloquear(mtx_estado);
+    copiarLimpio(ia_texto, sizeof(ia_texto), (const char *)datos, len);
+    ia_t_ms = len ? millis() : 0;
+    liberar(mtx_estado);
+    Serial.printf("MQTT: recomendacion de la IA (%u B)\n", len);
+    return;
+  }
+  if (strcmp(topico, top_cmd) != 0) return;
+
+  char cmd[160], accion[24], origen[32], resp[160];
+  size_t m = len < sizeof(cmd) - 1 ? len : sizeof(cmd) - 1;
+  memcpy(cmd, datos, m); cmd[m] = 0;
+  campoJson(cmd, "accion", accion, sizeof(accion));
+  campoJson(cmd, "origen", origen, sizeof(origen));
+  if (!accion[0]) copiarLimpio(accion, sizeof(accion), cmd, m);   // texto plano "silenciar"
+  if (!origen[0]) snprintf(origen, sizeof(origen), "MQTT");
+
+  if (strcmp(accion, "silenciar") == 0) {
+    char quien[48];
+    snprintf(quien, sizeof(quien), "%s (MQTT)", origen);
+    bloquear(mtx_estado);
+    bool hecho = silenciarAlarma(quien);
+    uint8_t est = estado;
+    liberar(mtx_estado);
+    snprintf(resp, sizeof(resp),
+             "{\"accion\":\"silenciar\",\"ok\":%d,\"estado\":\"%s\"%s}",
+             hecho ? 1 : 0, NOMBRE_EST[est],
+             hecho ? "" : ",\"motivo\":\"nada que silenciar\"");
+  } else if (strcmp(accion, "ping") == 0) {
+    snprintf(resp, sizeof(resp), "{\"accion\":\"ping\",\"ok\":1,\"uptime_s\":%lu}",
+             millis() / 1000);
+  } else {
+    snprintf(resp, sizeof(resp), "{\"accion\":\"%s\",\"ok\":0,\"motivo\":\"desconocida\"}",
+             accion);
+  }
+  mqtt.publish(top_resp, resp);
+  Serial.printf("MQTT: comando \"%s\" desde %s -> %s\n", accion, origen, resp);
+}
+
+// Solo registra un evento cuando el enlace cambia
+void marcarMqtt(bool ok) {
+  bloquear(mtx_estado);
+  if (ok != mqtt_ok) {
+    if (ok) registrarEvento(0, "Gateway MQTT conectado (%s)", MQTT_HOST);
+    else  { registrarEvento(1, "Gateway MQTT perdido; la alarma local sigue activa");
+            mqtt_reconexiones++; }
+  }
+  mqtt_ok = ok;
+  liberar(mtx_estado);
+}
+
+bool conectarMqtt() {
+  if (mqtt_por_nombre) {
+    bloquear(mtx_estado);
+    uint32_t ip = mqtt_ip;
+    liberar(mtx_estado);
+    if (ip == 0) {
+      mqtt_pide_resolver = true;
+      Serial.printf("MQTT: buscando %s en la red...\n", MQTT_HOST);
+      return false;
+    }
+    mqtt.setServer(IPAddress(ip), MQTT_PORT);
+    Serial.printf("MQTT: %s = %s\n", MQTT_HOST, IPAddress(ip).toString().c_str());
+  }
+  Serial.printf("MQTT: conectando a %s:%d como %s...\n", MQTT_HOST, MQTT_PORT, MQTT_USER);
+  // Ultima voluntad: si el ESP32 se apaga o pierde la red, el broker publica
+  // "offline" por el. Asi el gateway sabe que falta el equipo, no solo el dato.
+  bool ok = mqtt.connect(DEVICE_ID, MQTT_USER, MQTT_PASS,
+                         top_disp, 1, true, "offline");
+  if (!ok) {
+    mqtt_pide_resolver = true;   // la IP del gateway pudo cambiar: buscarla de nuevo
+    // 5 = usuario o clave mal; -2 = no llega a la IP (otra red o broker apagado)
+    Serial.printf("MQTT: fallo (estado %d); reintento en %lu s\n",
+                  mqtt.state(), MQTT_REINTENTO_MS / 1000);
+    return false;
+  }
+  mqtt.publish(top_disp, "online", true);
+  mqtt.subscribe(top_cmd, 1);
+  mqtt.subscribe(top_ia, 0);
+  Serial.println(F("MQTT: conectado"));
+  return true;
+}
+
+void publicarTelemetria(uint32_t seq) {
+  String s; s.reserve(700);
+  s = "{";
+  bloquear(mtx_estado);
+  jsonEnt(s, "seq", seq);
+  jsonEnt(s, "boot", boot_id);
+  jsonEnt(s, "uptime_s", millis() / 1000);
+  jsonEnt(s, "estado", estado);
+  jsonTxt(s, "estado_txt", NOMBRE_EST[estado]);
+  jsonEnt(s, "silenciado", silenciado ? 1 : 0);
+  jsonNum(s, "nivel", ultra_ok ? nivel_pct : NAN, 1);
+  jsonNum(s, "distancia", distancia_cm, 1);
+  jsonNum(s, "tasa", tasa_ppm, 1);
+  jsonEnt(s, "tasa_lista", buf_n >= MIN_MUESTRAS ? 1 : 0);
+  jsonNum(s, "riesgo", riesgo, 1);
+  jsonNum(s, "idx_evap", estado_evap == EVAP_OK ? idx_evap : NAN, 1);
+  jsonNum(s, "et", estado_evap == EVAP_OK ? pt.et_mm_dia : NAN, 2);
+  jsonNum(s, "temp", temp_c, 1);
+  jsonNum(s, "hum", hum_pct, 1);
+  jsonNum(s, "pres", pres_hpa, 1);
+  jsonNum(s, "vpd", vpd_kpa, 2);
+  jsonNum(s, "irr", irradiancia, 0);
+  jsonEnt(s, "sev_nivel", s_nivel);
+  jsonEnt(s, "sev_evap", s_evap);
+  jsonEnt(s, "sev_tasa", s_tasa);
+  jsonEnt(s, "sev_riesgo", s_riesgo);
+  jsonTxt(s, "modo", MODO_DEMO ? "DEMO" : "CAMPO");
+  jsonEnt(s, "bme_descartadas", bme_descartadas);
+  liberar(mtx_estado);
+  jsonEnt(s, "rssi", WiFi.RSSI());
+  jsonCerrar(s, '}');
+  if (!mqtt.publish(top_tel, s.c_str()))
+    Serial.println(F("MQTT: no se pudo publicar la telemetria"));
+}
+
+// Publica el estado si cambio desde la ultima vez (retenido: quien se
+// suscriba despues recibe el ultimo). Devuelve true si publico.
+bool publicarEstadoSiCambio(uint8_t &est_pub, bool &sil_pub) {
+  bloquear(mtx_estado);
+  uint8_t est = estado; bool sil = silenciado;
+  uint8_t sn = s_nivel, se = s_evap, st = s_tasa, sr = s_riesgo;
+  liberar(mtx_estado);
+  if (est == est_pub && sil == sil_pub) return false;
+  char buf[200];
+  snprintf(buf, sizeof(buf),
+           "{\"estado\":%u,\"estado_txt\":\"%s\",\"silenciado\":%d,"
+           "\"sev_nivel\":%u,\"sev_evap\":%u,\"sev_tasa\":%u,\"sev_riesgo\":%u,"
+           "\"boot\":%lu}",
+           est, NOMBRE_EST[est], sil ? 1 : 0, sn, se, st, sr, (unsigned long)boot_id);
+  if (!mqtt.publish(top_est, buf, true)) return false;
+  est_pub = est; sil_pub = sil;
+  return true;
+}
+
+// Publica los eventos del registro con id > ev_pub, del mas viejo al mas
+// nuevo. Si el broker estuvo caido, al volver se publican los que sigan en
+// el registro circular (los 24 ultimos): el gateway los guarda con su id y
+// descarta los repetidos.
+void publicarEventos(uint32_t &ev_pub) {
+  const uint8_t MAX_LOTE = 4;
+  Evento lote[MAX_LOTE];
+  uint8_t n = 0;
+  unsigned long ahora = millis();
+  bloquear(mtx_estado);
+  for (uint8_t k = 0; k < N_EVENTOS && n < MAX_LOTE; k++) {
+    const Evento &e = eventos[(ev_i + k) % N_EVENTOS];   // del mas viejo
+    if (e.id == 0 || e.id <= ev_pub) continue;
+    lote[n++] = e;
+  }
+  liberar(mtx_estado);
+  for (uint8_t k = 0; k < n; k++) {
+    String s; s.reserve(200);
+    s = "{";
+    jsonEnt(s, "id", lote[k].id);
+    jsonEnt(s, "boot", boot_id);
+    jsonEnt(s, "gravedad", lote[k].gravedad);
+    jsonEnt(s, "hace_ms", ahora - lote[k].t_ms);
+    jsonTxt(s, "texto", lote[k].texto);
+    jsonCerrar(s, '}');
+    if (!mqtt.publish(top_ev, s.c_str())) return;   // se reintenta en la siguiente vuelta
+    ev_pub = lote[k].id;
+  }
+}
+
+void iniciarMqtt() {
+  boot_id = esp_random() & 0x7FFFFFFF;   // cabe en un long con signo
+  snprintf(top_tel,  sizeof(top_tel),  "wrews/%s/telemetria", DEVICE_ID);
+  snprintf(top_est,  sizeof(top_est),  "wrews/%s/estado", DEVICE_ID);
+  snprintf(top_ev,   sizeof(top_ev),   "wrews/%s/eventos", DEVICE_ID);
+  snprintf(top_disp, sizeof(top_disp), "wrews/%s/disponibilidad", DEVICE_ID);
+  snprintf(top_cmd,  sizeof(top_cmd),  "wrews/%s/cmd", DEVICE_ID);
+  snprintf(top_resp, sizeof(top_resp), "wrews/%s/cmd/resp", DEVICE_ID);
+  snprintf(top_ia,   sizeof(top_ia),   "wrews/%s/ia/texto", DEVICE_ID);
+  size_t n = strlen(MQTT_HOST);
+  mqtt_por_nombre = n > 6 && strcasecmp(MQTT_HOST + n - 6, ".local") == 0;
+  if (mqtt_por_nombre)
+    snprintf(mqtt_nombre_mdns, sizeof(mqtt_nombre_mdns), "%.*s", (int)(n - 6), MQTT_HOST);
+  else
+    mqtt.setServer(MQTT_HOST, MQTT_PORT);
+  mqtt.setCallback(alRecibirMqtt);
+  if (!mqtt.setBufferSize(MQTT_BUFFER))
+    Serial.println(F("MQTT: sin memoria para el buffer; se usa el de 256 B"));
+  mqtt.setKeepAlive(15);       // el broker declara al equipo caido a los ~22 s
+  mqtt.setSocketTimeout(4);
+  BaseType_t ok = xTaskCreatePinnedToCore(tareaMqtt, "mqtt", PILA_MQTT, NULL,
+                                          PRIO_MQTT, &tarea_mqtt, NUCLEO_MQTT);
+  if (ok != pdPASS) Serial.println(F("MQTT: no se pudo crear la tarea; sigue sin nube"));
+  else Serial.printf("Tarea MQTT en el nucleo %d -> %s:%d, id %s\n",
+                     NUCLEO_MQTT, MQTT_HOST, MQTT_PORT, DEVICE_ID);
+}
+
+// ---------------------------------------------------------------------------
+//  TAREA MQTT (nucleo 0, prioridad 1)
+//  Cada 50 ms atiende el socket (comandos entrantes), publica eventos y
+//  cambios de estado apenas ocurren, y la telemetria cada 5 s. Sin red o sin
+//  broker espera y reintenta; nunca toca los pines ni el bus I2C.
+// ---------------------------------------------------------------------------
+void tareaMqtt(void *param) {
+  unsigned long t_intento = 0, t_tel = 0;
+  bool primer_intento = true;
+  uint8_t  est_pub = 255;
+  bool     sil_pub = false;
+  uint32_t ev_pub = 0, seq = 0;
+  for (;;) {
+    if (WiFi.status() != WL_CONNECTED) {
+      if (mqtt.connected()) mqtt.disconnect();
+      marcarMqtt(false);
+      vTaskDelay(pdMS_TO_TICKS(500));
+      continue;
+    }
+    if (!mqtt.connected()) {
+      marcarMqtt(false);
+      if (primer_intento || millis() - t_intento >= MQTT_REINTENTO_MS) {
+        primer_intento = false;
+        t_intento = millis();
+        if (conectarMqtt()) {
+          marcarMqtt(true);
+          est_pub = 255;          // republicar el estado retenido
+          t_tel = 0;
+        }
+      }
+      vTaskDelay(pdMS_TO_TICKS(200));
+      continue;
+    }
+    mqtt.loop();
+    publicarEstadoSiCambio(est_pub, sil_pub);
+    publicarEventos(ev_pub);
+    if (t_tel == 0 || millis() - t_tel >= MQTT_TELEMETRIA_MS) {
+      t_tel = millis();
+      publicarTelemetria(++seq);
+    }
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
+}
+
+// Corre en loop(): busca por mDNS el nombre del gateway cuando tareaMqtt lo
+// pide. Bloquea loop() hasta 1.5 s, a lo sumo una vez cada 10 s.
+void resolverBroker() {
+  static unsigned long t_busqueda = 0;
+  if (!mqtt_por_nombre || !mqtt_pide_resolver || !wifi_ok || !mdns_ok) return;
+  if (t_busqueda && millis() - t_busqueda < 10000) return;
+  t_busqueda = millis();
+  IPAddress ip = MDNS.queryHost(mqtt_nombre_mdns, 1500);
+  if ((uint32_t)ip == 0) {
+    Serial.printf("MQTT: %s no responde en la red (mDNS); se reintenta\n", MQTT_HOST);
+    return;
+  }
+  bloquear(mtx_estado);
+  bool cambio = mqtt_ip != 0 && mqtt_ip != (uint32_t)ip;
+  mqtt_ip = (uint32_t)ip;
+  if (cambio) registrarEvento(0, "Gateway encontrado en una IP nueva: %s",
+                              ip.toString().c_str());
+  liberar(mtx_estado);
+  mqtt_pide_resolver = false;
+}
+
+#else
+void iniciarMqtt() {
+  Serial.println(F("MQTT: desactivado (secrets.h no define MQTT_HOST)"));
+}
+void resolverBroker() {}
+#endif
+
 void setup() {
   Serial.begin(115200);
   delay(400);
-  Serial.println(F("\n\n===== WREWS v7 - prototipo funcional =====\n"));
+  Serial.println(F("\n\n===== WREWS v8 - prototipo funcional =====\n"));
 
   mtx_estado = xSemaphoreCreateMutex();
   mtx_i2c    = xSemaphoreCreateMutex();
@@ -1746,7 +2152,7 @@ void setup() {
   if (addr_lcd) {
     lcd = new LiquidCrystal_I2C(addr_lcd, 16, 2);
     lcd->init(); lcd->backlight();
-    lcd->setCursor(0,0); lcd->print("WREWS v7");
+    lcd->setCursor(0,0); lcd->print("WREWS v8");
     lcd->setCursor(0,1); lcd->print("Iniciando...");
     hay_lcd = true;
     Serial.printf("LCD  ..... OK en 0x%02X\n", addr_lcd);
@@ -1824,6 +2230,7 @@ void setup() {
   // y alarma. Sin red arranca igual.
   iniciarWiFi();
   iniciarServidor();
+  iniciarMqtt();
   if (wifi_ok)
     Serial.printf("Tablero: http://%s  (o http://%s.local desde un PC)\n\n",
                   ip_txt, NOMBRE_HOST);
@@ -1859,6 +2266,7 @@ void tareaAlarmas(void *param) {
 void loop() {
   servidor.handleClient();
   vigilarWiFi();
+  resolverBroker();
 
   unsigned long ahora = millis();
   if (ahora - t_pagina >= T_PAGINA_MS) {

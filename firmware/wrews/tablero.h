@@ -7,6 +7,11 @@
 //
 //  Datos: GET /api/actual (cada 2 s), /api/historial (cada 5 s),
 //         /api/eventos?desde=N (cuando cambia ultimo_evento), /api/config.
+//  Avisos (v8): banner + pitido por evento; en CRITICO o FALLO el pitido se
+//  repite y el titulo de la pestana parpadea hasta pulsar "Entendido";
+//  notificacion del sistema cuando la pestana esta oculta (solo si el
+//  navegador lo permite: la Notification API exige contexto seguro).
+//  Tambien muestra la recomendacion del modulo de IA que baja del gateway.
 //  Acciones: POST /api/silenciar, POST /logout,
 //            GET y POST /api/parametros, POST /api/parametros/restaurar.
 // ============================================================================
@@ -59,6 +64,8 @@ main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px}
 .card{background:var(--card);border:1px solid var(--borde);border-radius:12px;padding:14px 16px}
 #aviso{display:none;border-radius:12px;padding:12px 16px;color:#fff;font-weight:600;align-items:center;justify-content:space-between;gap:12px}
 #aviso button{background:rgba(255,255,255,.2);border:0;color:#fff;border-radius:6px;padding:4px 10px;font-size:13px}
+#ia{border-left:6px solid var(--acc)}#ia p{margin:6px 0 4px;font-size:15px;line-height:1.45}#ia small{color:var(--sub)}
+#btnAvisos{border-color:var(--acc);color:var(--acc)}
 #sinred{display:none;background:var(--fallo);color:#fff;border-radius:12px;padding:10px 16px;font-weight:600}
 .estado{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;border-left:8px solid var(--ok)}
 .estado .nom{font-size:28px;font-weight:700;letter-spacing:.5px}
@@ -98,7 +105,8 @@ details.card>summary{cursor:pointer;font-weight:600;font-size:15px}
 #confMsg{font-size:14px}
 </style></head><body>
 <header><div><h1>WREWS · Tablero de control</h1><small id="sub">Conectando…</small></div>
-<form method="post" action="/logout"><button type="submit">Cerrar sesión</button></form></header>
+<div style="display:flex;gap:8px"><button id="btnAvisos" type="button" onclick="activarAvisos()">Activar avisos</button>
+<form method="post" action="/logout"><button type="submit">Cerrar sesión</button></form></div></header>
 <main>
 <div id="sinred">Sin conexión con el equipo. Se reintenta cada 2 s; la alarma local sigue funcionando.</div>
 <div id="aviso"><span id="avisoTxt"></span><button onclick="cerrarAviso()">Entendido</button></div>
@@ -107,6 +115,10 @@ details.card>summary{cursor:pointer;font-weight:600;font-size:15px}
 <div><div class="nom" id="estNom">—</div><div class="det" id="estDet"></div></div>
 <button id="btnSil" disabled onclick="silenciar()">Silenciar alarma 15 min</button>
 </section>
+
+<section class="card" id="ia"><h2>Recomendación del módulo de IA</h2>
+<p id="iaTxt">Todavía no llega ninguna recomendación del gateway.</p>
+<small id="iaSub">Gateway MQTT: —</small></section>
 
 <section class="grid">
 <div class="card m" id="cNivel"><div class="et">Nivel</div><div class="v"><span id="vNivel">—</span> <span class="u">%</span></div><div class="n" id="nNivel"></div></div>
@@ -221,9 +233,32 @@ function avisar(ev){
   a.style.display='flex';a.style.background=css(COLOR[Math.min(ev.gravedad,2)]);
   if(ev.gravedad==0)a.style.background=css('--acc');
   $('avisoTxt').textContent=ev.texto;
-  if(ev.gravedad>=1){pitido(ev.gravedad);if(navigator.vibrate)navigator.vibrate([200,100,200]);}
+  if(ev.gravedad>=1){pitido(ev.gravedad);if(navigator.vibrate)navigator.vibrate([200,100,200]);notificarSistema(ev.texto);}
 }
-function cerrarAviso(){$('aviso').style.display='none';}
+function cerrarAviso(){$('aviso').style.display='none';if(ultimo)reconocido=ultimo.estado_n;}
+
+// Avisos activos. El navegador solo deja sonar audio despues de un toque y la
+// notificacion del sistema solo en contexto seguro (HTTPS o localhost): sobre
+// http://IP el aviso queda en la pagina (banner, pitido, titulo, vibracion).
+let reconocido=0, parpadeo=false;
+function activarAvisos(){
+  if(!audio){try{audio=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}
+  if(audio&&audio.state=='suspended')audio.resume();
+  if(window.isSecureContext&&'Notification' in window&&Notification.permission=='default')Notification.requestPermission();
+  $('btnAvisos').textContent='Avisos activos';$('btnAvisos').disabled=true;pitido(1);
+}
+function notificarSistema(t){
+  try{if(document.hidden&&window.isSecureContext&&'Notification' in window&&Notification.permission=='granted')new Notification('WREWS',{body:t});}catch(e){}
+}
+// Se llama en cada ciclo (2 s). En CRITICO o FALLO, mientras nadie pulse
+// "Entendido" en esta pagina y el buzzer no este silenciado, insiste.
+function insistir(a){
+  if(a.estado_n<2){reconocido=0;return;}
+  if(a.estado_n==reconocido||a.silenciado)return;
+  pitido(2);if(navigator.vibrate)navigator.vibrate(150);
+  parpadeo=!parpadeo;
+  if(document.hidden)document.title=(parpadeo?'⚠⚠ ':'')+(NOM[a.estado]||a.estado).toUpperCase()+' · WREWS';
+}
 
 function tarjeta(id,sev){const c=$(id);c.classList.remove('s0','s1','s2');c.classList.add('s'+Math.min(sev,2));}
 
@@ -232,7 +267,7 @@ function pintar(a){
   const est=$('est');est.style.borderLeftColor=css(COLOR[a.estado_n]);
   $('estNom').textContent=NOM[a.estado]||a.estado;$('estNom').style.color=css(COLOR[a.estado_n]);
   let det=a.silenciado?'Buzzer silenciado, quedan '+dur(a.silencio_rest_s)+'. ':'';
-  if(a.estado_n==3)det+='Revise el sensor de nivel o el BME280.';
+  if(a.estado_n==3)det+='Revise el sensor de nivel o el BME280 (conexión de SDA/SCL).';
   else det+='Severidad · nivel '+a.sev_nivel+' · evaporación '+a.sev_evap+' · tasa '+a.sev_tasa+' · riesgo '+a.sev_riesgo;
   $('estDet').textContent=det;
   const b=$('btnSil');b.disabled=a.estado_n==0||a.silenciado;
@@ -262,8 +297,14 @@ function pintar(a){
 
   const edad=(a.t_ms-a.t_muestra_ms)/1000;
   $('sub').textContent='Red '+(a.red||cfg.red||'')+' · señal '+a.rssi+' dBm · dato de hace '+edad.toFixed(1)+' s';
-  $('pie').textContent='Equipo encendido hace '+dur(a.t_ms/1000)+' · reconexiones Wi-Fi: '+a.reconexiones_wifi+' · modo '+a.modo;
+  $('pie').textContent='Equipo encendido hace '+dur(a.t_ms/1000)+' · reconexiones Wi-Fi: '+a.reconexiones_wifi+' · modo '+a.modo+
+    (a.bme_descartadas?' · lecturas del BME280 descartadas: '+a.bme_descartadas:'');
   document.title=(a.estado_n>0?'⚠ ':'')+'WREWS · '+(NOM[a.estado]||a.estado);
+  insistir(a);
+  $('iaTxt').textContent=a.ia_texto||'Todavía no llega ninguna recomendación del gateway.';
+  $('iaSub').textContent='Gateway MQTT: '+(a.mqtt_ok?'conectado':'desconectado')+
+    (a.ia_edad_s>=0?' · recomendación de hace '+dur(a.ia_edad_s):'')+
+    (a.mqtt_reconexiones?' · caídas del enlace: '+a.mqtt_reconexiones:'');
   if($('conf').open)vivoConf(a.ultra_ok?a.distancia_cm:null,a.corriente_ma);
   pintarEventos();
 }
