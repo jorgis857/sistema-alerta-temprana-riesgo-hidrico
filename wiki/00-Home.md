@@ -14,7 +14,7 @@ En el **Challenge #3** WREWS pasa a ser un **ecosistema IoT completo**. El ESP32
 
 ## 🎥 Video de demostración
 
-▶️ **Video de demostración de WREWS (Challenge #3):** en edición; el enlace se agrega aquí al publicarlo.
+▶️ **[Ver video de demostración de WREWS (Challenge #3)](https://youtu.be/llcz_bKJn-8)**
 
 ▶️ **[Ver video de demostración de WREWS (Challenge #2)](https://youtu.be/H0U9AYJEdTg)**
 
