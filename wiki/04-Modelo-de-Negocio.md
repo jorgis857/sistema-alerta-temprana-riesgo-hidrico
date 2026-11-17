@@ -38,5 +38,28 @@ Aunque el proyecto nace como un reto académico, se plantea un modelo de negocio
 
 La ausencia de costos recurrentes de conectividad (sin SIM, sin suscripción cloud) hace que el **costo marginal por nodo adicional sea bajo y predecible**, lo que favorece un despliegue distribuido en los 20 municipios identificados por la CAR en riesgo extremo de desabastecimiento [2]. La principal barrera de escalamiento no es tecnológica sino logística: la calibración física de cada punto (distancias de lleno y vacío) y el mantenimiento en campo, que se resuelven mediante el modelo de servicio de instalación/mantenimiento descrito arriba. Desde el Challenge #2 esa calibración se hace desde el tablero de control, sin abrir el equipo ni reprogramarlo, lo que reduce el tiempo de instalación por punto. El tablero usa la WLAN que ya ofrece la autoridad local, sin costos recurrentes de conectividad.
 
+## 4.4 Ajustes al modelo de negocio (Challenge #3)
+
+El Challenge #3 agrega un **gateway** por zona y una capa en la nube, lo que cambia la propuesta de valor y la estructura de costos.
+
+**Propuesta de valor ampliada.** La alerta in situ sigue funcionando sin Internet (no se pierde la ventaja anterior), y ahora las autoridades de la alcaldía o la gobernación **ven el estado de todos los puntos desde cualquier lugar**, reciben las alertas en el celular y pueden pedir una recomendación de acción basada en los datos. El histórico queda en la nube y, como respaldo, en la base local del gateway.
+
+**Arquitectura de despliegue.** Un gateway (Raspberry Pi) atiende **varios nodos** de la misma zona: los tópicos MQTT llevan el identificador de cada equipo. El costo del gateway se reparte entre los nodos.
+
+| Componente nuevo | Costo aprox. (COP) | Tipo |
+|---|---|---|
+| Raspberry Pi + fuente + microSD | ≈ $665.500: kit Raspberry Pi 4 de 4 GB con fuente de 5 V 3 A, microSD de 32 GB y caja (Demosspro, consultado el 16/11/2026) | Una vez por zona (compartido entre nodos) |
+| Conectividad del gateway (hotspot o internet de la zona) | ≈ $15.000: plan prepago de 1 GB (Claro, según MejorPlan, 16/11/2026). El gateway gasta unos 70 MB al mes: en las pruebas subió 423 mensajes de ~300 bytes en 3,9 h | Mensual |
+| Ubidots | 0 en el plan STEM (académico); plan Professional de USD 99 por mes, hasta 50 dispositivos (≈ $328.000 con la TRM de $3.316,70 del 16/11/2026). El plan Industrial se cotiza aparte | Mensual |
+| Telegram (alertas y dashboard) | 0 | — |
+| Claude (recomendación a pedido) | ≈ USD 0,02 por consulta; en las pruebas, 31 consultas costaron ≈ USD 0,56 | Por uso |
+
+**Estructura de costos.** Aparece un costo recurrente (conectividad del gateway y plataforma en la nube) que no existía en el Challenge #2. Se mantiene bajo por tres decisiones de diseño:
+- se suben promedios por minuto, no cada muestra;
+- las alertas al celular van por Telegram, sin costo, en vez de SMS (el cupo de SMS del plan gratuito se agotó en las pruebas);
+- el modelo de lenguaje se consulta solo cuando una autoridad lo pide.
+
+**Nuevas fuentes de ingreso posibles.** Suscripción anual por zona que incluye el gateway, el tablero global y el canal de alertas por Telegram para las autoridades. Reportes mensuales para la alcaldía o la empresa de acueducto, generados a partir del histórico del gateway (consumo, tendencia del nivel y eventos). Un servicio de instalación y mantenimiento de los nodos y del gateway, cobrado por visita.
+
 ---
 [⬅ Anterior: Desarrollo modular](03-Desarrollo-Modular.md) · [⬆ Índice](00-Home.md) · [Siguiente: Configuración experimental y resultados ➡](05-Configuracion-Experimental-Resultados.md)

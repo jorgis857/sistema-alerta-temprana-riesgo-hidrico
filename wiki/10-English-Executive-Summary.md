@@ -248,4 +248,18 @@ In Challenge #2, WREWS evolved into an enclosed, battery-powered device with a s
 
 ---
 
+## Challenge #3: MQTT gateway, cloud dashboard and AI
+
+In Challenge #3 WREWS became a full IoT ecosystem while keeping its stand-alone local alarm:
+
+- **Device (ESP32, firmware v8).** A fourth FreeRTOS task publishes telemetry (every 5 s), state changes and events over **MQTT**, with a last-will message, and receives the *silence alarm* command and the AI recommendation. It never holds the shared-state mutex while using the network, so a network or broker failure cannot freeze the local alarm. Physically impossible BME280 readings, caused by a loose I²C contact found during testing, are now discarded before they reach the evaporation model.
+- **Gateway (Raspberry Pi).** Mosquitto requires a username and password and enforces per-user ACLs. A Python service **stores every message in SQLite before forwarding it**, flags anomalies (per-variable physical ranges plus a robust MAD z-score on level changes), aggregates 60 s windows, detects a silent device within 20 s, and bridges to **Ubidots over MQTT/TLS** in both directions, with a store-and-forward queue for Internet outages.
+- **Cloud dashboard (Ubidots).** Current value, history, notification events, and a switch that disables the physical alarm (tested end to end: command acknowledged by the ESP32 within 60 ms of the gateway forwarding it).
+- **AI module.** An in-house linear regression estimates the minutes until the level reaches the 15 % critical threshold, at no cost and without Internet. On demand, **Claude** (Anthropic) turns those numbers into a short recommendation for local authorities, about USD 0.02 per query, with a rule-based fallback. The model never computes figures, and every prompt is logged in SQLite.
+- **Mobile channel (Telegram).** For approved users only (registration passcode plus administrator approval): instant alerts, a dashboard image rendered by the gateway, and a pinned live dashboard that refreshes every minute.
+
+Measured results on the Raspberry Pi 5 (13 Nov 2026, four hours with the real prototype): 1477 measurements stored in SQLite (one every 5 s); gateway-to-Ubidots median latency 0.8 s; state change to Telegram alert in about 2 s; ESP32 shutdown detected in 20.5–21 s; alarm silenced from the cloud in 15–56 ms; an 8-minute network outage left 10 messages queued in SQLite, uploaded within 5 s with their original timestamps; automatic recovery after a broker outage; Claude answered in 6.9–11.5 s. In total, 31 AI queries during development cost about USD 0.56, and the 22 automated tests pass.
+
+---
+
 [⬅ Previous: Team and roles](09-Equipo-Roles.md) · [⬆ Index](00-Home.md)

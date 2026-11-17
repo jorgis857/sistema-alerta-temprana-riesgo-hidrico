@@ -14,12 +14,12 @@ En la U solo falta **cambiar el Mac por la Raspberry Pi** y **grabar**.
 
 ## 1. Qué llevar (todo quedó preparado la noche anterior)
 
-- [ ] **La microSD ya grabada** (la prepara Jorge con `GUIA_MICROSD_JORGE`): hostname `wrews-gw`, usuario `equipo2`, Wi-Fi `WREWS-Hotspot` y SSH activado. **La Raspberry Pi la presta la universidad**: confirmar que venga con su fuente (Pi 4: USB-C de 3 A).
-- [ ] **El prototipo WREWS** y su **cable USB de datos**. El ESP32 ya tiene el firmware para la U: busca `WREWS-Hotspot` y `wrews-gw.local`.
-- [ ] **El Mac de Mateo** con la carpeta **`~/Downloads/WREWS-kit-U`**. Trae el `gateway.env` de la Pi ya lleno con todas las claves, el script `instalar_en_pi.sh` y las guías de la microSD. También tiene Raspberry Pi Imager y arduino-cli, por si hay que regrabar algo.
-- [ ] **Un celular para el hotspot**, con datos, y **otro para grabar**.
-- [ ] La cuenta de Ubidots abierta en el navegador y Telegram en el celular del administrador.
-- [ ] Un cartón o la mano para mover el nivel frente al ultrasónico (lleno = 30 cm, vacío = 40,3 cm).
+- [x] **La microSD ya grabada** (la prepara Jorge con `GUIA_MICROSD_JORGE`): hostname `wrews-gw`, usuario `equipo2`, Wi-Fi `WREWS-Hotspot` y SSH activado. **La Raspberry Pi la presta la universidad**: confirmar que venga con su fuente (Pi 4: USB-C de 3 A).
+- [x] **El prototipo WREWS** y su **cable USB de datos**. El ESP32 ya tiene el firmware para la U: busca `WREWS-Hotspot` y `wrews-gw.local`.
+- [x] **El Mac de Mateo** con la carpeta **`~/Downloads/WREWS-kit-U`**. Trae el `gateway.env` de la Pi ya lleno con todas las claves, el script `instalar_en_pi.sh` y las guías de la microSD. También tiene Raspberry Pi Imager y arduino-cli, por si hay que regrabar algo.
+- [x] **Un celular para el hotspot**, con datos, y **otro para grabar**.
+- [x] La cuenta de Ubidots abierta en el navegador y Telegram en el celular del administrador.
+- [x] Un cartón o la mano para mover el nivel frente al ultrasónico (lleno = 30 cm, vacío = 40,3 cm).
 
 ## 2. Montaje en la U (unos 20 min)
 

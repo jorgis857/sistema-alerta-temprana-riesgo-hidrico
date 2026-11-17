@@ -37,7 +37,7 @@ En el Challenge #2 el alcance es un **prototipo de producto terminado**: el ESP3
 
 ## 1.5 Estructura de la documentación
 
-Esta Wiki sigue la estructura solicitada en el enunciado del Challenge #2:
+Esta Wiki sigue la estructura solicitada en los enunciados de los Challenges #2 y #3:
 
 | Sección | Contenido |
 |---|---|
@@ -52,6 +52,22 @@ Esta Wiki sigue la estructura solicitada en el enunciado del Challenge #2:
 | [10. Executive Summary](10-English-Executive-Summary.md) | Resumen del proyecto en inglés |
 | [11. Conectividad IoT](11-Conectividad-IoT.md) | Actividad de refuerzo #2.3: red distribuida de nodos con MQTT |
 | [12. Mejoras respecto al Challenge #1](12-Mejoras-Challenge-1.md) | Cómo se atendieron las deficiencias y la retroalimentación del Challenge #1 |
+
+---
+
+## 1.6 Evolución en el Challenge #3
+
+El Challenge #3 pide que el tablero de control sea **local y global**, que todos los datos viajen por **MQTT** hasta un **gateway** donde se almacenen y se procesen antes de llegar a la nube, y que el sistema integre un **módulo de inteligencia artificial** para apoyar las decisiones de las autoridades.
+
+WREWS responde con tres capas:
+
+| Capa | Equipo | Qué hace |
+|---|---|---|
+| **Dispositivo** | ESP32 (firmware v8) | Mide, fusiona, decide el estado y alarma en sitio, igual que antes. En un hilo nuevo publica todo por MQTT y recibe la orden de silenciar desde la nube |
+| **Gateway** | Raspberry Pi | Mosquitto con usuario, clave y permisos; SQLite antes de reenviar; validación y agregación; puente con Ubidots; módulo de IA; bot de Telegram |
+| **Nube** | Ubidots + Claude + Telegram | Tablero global con histórico, eventos de notificación y switch para silenciar; recomendación en lenguaje natural; canal móvil para autoridades autorizadas |
+
+**Justificación.** Un tablero dentro de la WLAN solo sirve a quien está en el sitio. Durante una emergencia por El Niño, las decisiones (racionar, priorizar hospitales, comunicar) se toman en la alcaldía o en la gobernación. El gateway permite que la información salga del sitio **sin que la alarma local dependa de Internet**, y guarda una copia local de todo, de modo que una caída de la conexión no borra el histórico.
 
 ---
 [⬅ Volver al índice](00-Home.md) · [Siguiente: Solución propuesta ➡](02-Solucion-Propuesta.md)

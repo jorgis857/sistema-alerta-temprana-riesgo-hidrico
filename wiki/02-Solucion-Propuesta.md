@@ -36,14 +36,6 @@ En el Challenge #2 se añade un **tablero de control web** alojado en un servido
 | **Seguridad (Ch. #2)** | Acceso al tablero restringido a dispositivos autorizados y conectados a la WLAN de la zona | Doble condición: el cliente debe estar en la misma subred del equipo y tener una sesión iniciada con usuario y contraseña (cookie con token aleatorio de 128 bits, bloqueo tras 5 intentos fallidos) |
 | **Operativa (Ch. #2)** | El equipo debe instalarse cerrado, como producto terminado | Carcasa impresa en 3D (PETG), sensor de nivel dentro de un tubo de PVC sanitario de 3", alimentación por pilas con interruptor, y calibración desde el tablero sin abrir la caja |
 | **Robustez (Ch. #2)** | Pérdida y reconexión de la WLAN | La alarma física no depende de la red; el ESP32 se reconecta solo y admite hasta dos redes configuradas |
-| **Regulatoria · eléctrica** | Seguridad eléctrica cerca del agua: RETIE [32] | Todo funciona en muy baja tensión (pilas, 5 V y 3.3 V) dentro de la carcasa; no hay 110 V cerca del agua |
-| **Regulatoria · agua** | Infraestructura de acueducto: Resolución 0330 de 2017, RAS [33] | El equipo es complementario: mide sin contacto dentro de un tubo de PVC y no interviene la tubería ni la operación del acueducto |
-| **Regulatoria · intemperie** | Grado de protección de la envolvente: IEC 60529 [34] | Carcasa cerrada con el BME280 bajo un techo ventilado; el grado IP no se ensayó y se declara como trabajo futuro |
-| **Regulatoria · gestión del riesgo** | Ley 1523 de 2012 [35]: a quién se reporta | El tablero está pensado para la junta de acueducto y la unidad municipal de gestión del riesgo; el registro de eventos con su hora sirve de soporte para el reporte |
-| **Regulatoria · datos** | Ley 1581 de 2012 [36] | El tablero no maneja datos personales; el acceso es restringido y cada inicio de sesión y cada clave incorrecta quedan registrados con la dirección del dispositivo |
-| **Regulatoria · espectro** | Uso de radiofrecuencia [37] | Wi-Fi en la banda de 2.4 GHz, de uso libre en Colombia |
-| **Temporal** | Entrega en dos semanas a partir del Challenge #1 | Se reutilizaron ESP32, sensores, LCD y la lógica de fusión; lo nuevo se construyó por etapas (modelo, hilos, Wi-Fi y tablero, calibración) probando cada una en el hardware |
-| **Temporal · muestreo** | Fenómenos lentos, pero la tasa necesita muchas muestras | Medición cada 1 s (mediana de 5 ecos para el nivel); evaporación sobre una ventana móvil; historial del tablero con un punto cada 2 s durante 10 min |
 | **Técnica** | Los sensores utilizan diferentes interfaces | BME280, INA219 y LCD utilizan el bus I²C; el sensor ultrasónico utiliza GPIO digital para TRIG y ECHO |
 | **Técnica** | El sistema debe detectar cambios en el comportamiento del nivel | Se comparan mediciones sucesivas para estimar la tasa de descenso |
 | **Técnica** | Una condición crítica no debe quedar oculta por un promedio | Además del índice ponderado se utilizan reglas de seguridad independientes |
@@ -566,19 +558,68 @@ El detalle está en las [Secciones 3.14 a 3.19](03-Desarrollo-Modular.md).
 
 ---
 
-## 2.17 Locación y contexto físico (Challenge #2)
+## 2.18 Arquitectura del ecosistema IoT (Challenge #3)
 
-| Aspecto | Definición del equipo |
-|---|---|
-| **Punto crítico** | Lago del campus de la Universidad de La Sabana (Chía, Sabana Centro) como sitio de instalación y pruebas; como alternativa, el tanque de un acueducto veredal de Chía o Cajicá. El nodo se instala en la orilla, anclado a un poste o baranda, y mide dentro de un tubo de PVC que llega por debajo del nivel mínimo |
-| **Ambiente** | Intemperie a ≈ 2560 m s. n. m.: lluvia, radiación UV alta, heladas en temporada seca y humedad alta en la noche |
-| **Alimentación** | Pilas en el prototipo; en campo, red de 5 V con respaldo o panel solar con baterías. El servidor web obliga a tener el Wi-Fi siempre encendido |
-| **Conectividad** | WLAN de la junta o la alcaldía, con el punto de acceso a ≤ 30 m y línea de vista; objetivo de señal ≥ −70 dBm en el punto de instalación |
-| **Acceso y mantenimiento** | Montaje con tornillería antivandalismo; mantenimiento mensual (limpiar el sensor, revisar la alimentación); calibración desde el tablero, sin tocar el agua |
-| **Rango de variables** | Nivel: 0–2 m en un tanque típico (en el prototipo, el recorrido del tubo); temperatura ≈ 0–25 °C; HR 40–95 %; presión ≈ 750 hPa; radiación hasta ≈ 1100–1200 W/m² al mediodía |
-| **Seguridad del sitio** | Solo muy baja tensión dentro de la caja; nada de 110 V cerca del agua |
+### Diagrama de bloques
 
-⟨completar: fotos del sitio, medidas y RSSI medido en el punto de instalación, si se hizo la visita⟩
+```mermaid
+flowchart LR
+    subgraph SITIO["Sitio: reservorio (WLAN de la zona / hotspot)"]
+        ESP["ESP32 · firmware v8<br/>medición · fusión · estado<br/>alarma local (LCD, LEDs, buzzer)"]
+        TL["Tablero local<br/>(servidor web del ESP32)"]
+        subgraph PI["Gateway · Raspberry Pi"]
+            MQ["Mosquitto<br/>usuario + clave + ACL"]
+            GW["Servicio wrews-gateway<br/>validación · ventanas · vigilancia"]
+            DB[("SQLite<br/>todo se guarda primero")]
+            IA["Módulo de IA<br/>regresión propia"]
+        end
+    end
+    subgraph NUBE["Internet"]
+        UB["Ubidots<br/>tablero global · eventos · switch"]
+        CL["Claude (Anthropic)<br/>recomendación a pedido"]
+        TG["Telegram<br/>bot con acceso aprobado"]
+    end
+    ESP -- "MQTT: telemetría, estado,<br/>eventos, LWT" --> MQ
+    MQ -- "MQTT: silenciar,<br/>recomendación" --> ESP
+    ESP --- TL
+    MQ <--> GW
+    GW --> DB
+    DB --> IA
+    GW -- "MQTT + TLS (8883)" --> UB
+    UB -- "switch silenciar" --> GW
+    IA -- "HTTPS" --> CL
+    GW -- "HTTPS: alertas, dashboard" --> TG
+```
+
+El ESP32 sigue siendo autónomo: mide, decide el estado y alarma sin depender de la red. Lo nuevo va **alrededor** de él. La comunicación MQTT corre en un hilo propio (ver [3.21](03-Desarrollo-Modular.md)), así que si se cae el broker o la WLAN, la alarma local no se entera.
+
+### Restricciones de diseño nuevas
+
+| Tipo | Restricción | Decisión |
+|---|---|---|
+| **Técnica** | El enunciado exige MQTT entre el dispositivo y el gateway, y entre el gateway y la nube | MQTT en los dos tramos: Mosquitto local y Ubidots por MQTT con TLS |
+| **Técnica** | Los datos deben guardarse antes de transmitirse | El gateway escribe cada mensaje en SQLite antes de procesarlo; lo que va a la nube pasa por una cola en la misma base (*store and forward*) |
+| **Técnica** | La comunicación en un hilo distinto al principal | Cuarto hilo de FreeRTOS (`tareaMqtt`), por debajo de la prioridad de la medición |
+| **Técnica** | El hotspot puede cambiar la IP de la Pi | El ESP32 busca el gateway por nombre en la red local (mDNS, `wrews-gw.local`) |
+| **Económica** | Plan gratuito de Ubidots (STEM): pocas variables por dispositivo y un cupo pequeño de SMS, que se agotó en las pruebas | 10 variables; datos promediados por minuto; alertas al celular por Telegram, que no tiene costo |
+| **Económica** | Créditos limitados en la API de la IA | La predicción es propia (sin costo); el modelo de lenguaje solo se consulta cuando una autoridad lo pide, máximo una vez por minuto (~USD 0,02 por consulta) |
+| **Regulatoria** | Protección de datos personales (Ley 1581 de 2012 [41]) | El sistema no guarda datos personales de la población; del bot solo se guarda el identificador del chat y el nombre de las autoridades que el administrador aprueba |
+| **Seguridad** | El acceso debe ser solo para usuarios autorizados | Broker sin anónimos y con permisos por usuario; Ubidots privado con TLS; Telegram con clave de registro y aprobación del administrador |
+| **Escalabilidad** | Varios reservorios en la región | Los tópicos llevan el identificador del equipo (`wrews/<id>/...`); un gateway puede atender varios ESP32 y la ACL ya usa comodines |
+| **Temporal** | Tres días entre el enunciado y la entrega | Se reutilizó todo el firmware del Challenge #2 y se probó primero con un computador haciendo de gateway |
+
+### Tópicos MQTT
+
+| Tópico | Sentido | Contenido |
+|---|---|---|
+| `wrews/wrews-01/telemetria` | ESP32 → gateway | JSON cada 5 s: nivel, tasa, riesgo, índice evaporativo, ET, temperatura, humedad, presión, VPD, irradiancia, estado, severidades y RSSI |
+| `wrews/wrews-01/estado` | ESP32 → gateway | JSON cuando cambia (retenido) |
+| `wrews/wrews-01/eventos` | ESP32 → gateway | Cada evento del registro (id, arranque, gravedad, texto) |
+| `wrews/wrews-01/disponibilidad` | ESP32 / broker | `online` / `offline` (última voluntad, LWT) |
+| `wrews/wrews-01/cmd` y `cmd/resp` | gateway ↔ ESP32 | Orden de silenciar (o `ping`) y su respuesta |
+| `wrews/wrews-01/ia/texto` | gateway → ESP32 | Recomendación para el tablero local (retenido) |
+| `/v1.6/devices/wrews-01` | gateway → Ubidots | Variables con su marca de tiempo |
+| `/v1.6/devices/wrews-01/silenciar` | Ubidots → gateway | Switch para desactivar la alarma física |
 
 ---
 

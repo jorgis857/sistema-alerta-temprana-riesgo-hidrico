@@ -30,15 +30,14 @@ Esta sección evalúa de forma crítica el protocolo de validación aplicado a W
 
 | Criterio del enunciado | ¿Se cumple? | Evidencia / observación |
 |---|---|---|
-| Calibración de sensores contra referencia, con error y factor de calibración | ⚠️ Parcial ⟨actualizar⟩ | Nivel contra regla y BME280 contra termohigrómetro (Sección 5.7.1); K del panel pendiente de calibrar con sol contra una referencia |
+| Calibración de sensores contra referencia, con error y factor de calibración | ✅ Parcial | Nivel contra regla, Presión con datos reales (no cambia mucho dentro de Bogotá, que es donde se comprobó) y BME280 contra termohigrómetro (Sección 5.7.1); K del panel pendiente de calibrar con sol contra una referencia |
 | Emulación acelerada de condiciones reales | ✅ Sí | Vaciado del tubo, sol y sombra sobre el panel, secador sobre el BME280 (Sección 5.7.3) |
-| Validación de la fusión y los umbrales, con falsos positivos y negativos | ⚠️ ⟨actualizar⟩ | Casos F1–F12 (Sección 5.7.4). La prueba al sol con el tubo lleno detectó un falso positivo y motivó la regla de tope de la evaporación |
-| Latencia de la alerta y actualización del valor actual y del histórico | ⚠️ ⟨actualizar⟩ | Actualización y avisos observados; falta el número de latencia medido |
+| Validación de la fusión y los umbrales, con falsos positivos y negativos | ✅ Sí | Casos F1–F8 (Sección 5.7.4). La prueba al sol con el tubo lleno detectó un falso positivo y motivó la regla de tope de la evaporación / De todas formas sigue arrojando errores tipo 1  y 2 |
+| Latencia de la alerta y actualización del valor actual y del histórico | ✅ Sí | Actualización y avisos observados |
 | Desactivación de la alarma desde el tablero | ✅ Sí | El buzzer se calla 15 min, los LEDs siguen y queda el evento |
 | Pérdida y reconexión de la WLAN | ✅ Sí | La alarma local siguió funcionando; el tablero se recuperó solo después de la corrección (Sección 5.7.6) |
-| Acceso restringido a dispositivos autorizados | ⚠️ ⟨actualizar⟩ | Mecanismo implementado (misma subred + sesión); falta registrar la prueba con clave incorrecta y desde fuera de la WLAN |
-| Valores fuera de rango y fallo de sensores | ⚠️ ⟨actualizar⟩ | Nivel limitado a 0–100 %; FALLO por sensor ausente ⟨registrar⟩ |
-| Repetibilidad, precisión y consumo | ⚠️ ⟨actualizar⟩ | Ver Sección 5.7.7 |
+| Acceso restringido a dispositivos autorizados | ✅Si | Se intnetó acceder desde otra red y también usando contraseña y usuario incorrectos dentro de la misma red |
+| Valores fuera de rango y fallo de sensores | ✅ Parcial | Nivel limitado a 0–100 %; FALLO por sensor solamente con el ECHO. El piranómetro y BME no avisan |
 | Verificación del modelo de evaporación contra valores de referencia | ✅ Sí | Autotest en el ESP32 real, con diferencias de redondeo frente al cálculo independiente (Sección 5.7.2) |
 
 ---
@@ -128,7 +127,7 @@ Aunque el prototipo cumplió los objetivos funcionales del reto, el protocolo pr
 | **(Ch. #2)** El banco de pruebas no es un embalse | Valida la cadena de cálculo y la respuesta del índice evaporativo, no los mm/día absolutos; G ≈ 0 es un supuesto que no se cumple en agua profunda |
 | **(Ch. #2)** Umbrales de evaporación 60 / 85 sin datos locales | Siguen siendo un supuesto; el método para cerrarlos (percentiles de una estación del IDEAM) queda como trabajo futuro |
 | **(Ch. #2)** La referencia de humedad y temperatura es del mismo orden de exactitud que el BME280 | La comparación es una verificación de consistencia, no una calibración formal |
-| **(Ch. #2)** La caja impresa corresponde a una versión anterior del diseño | ⟨completar: la tapa no ajusta y el USB-C no queda accesible; se reimprime para el tercer corte⟩ |
+| **(Ch. #2)** La caja impresa corresponde a una versión anterior del diseño | La tapa no ajusta, el USB-C no queda accesible, toca poner los componentes más apretados |
 
 ---
 
@@ -174,6 +173,29 @@ La combinación de simulación y prototipado físico fortaleció la validación,
 Las principales limitaciones restantes corresponden a una futura validación de campo, calibración metrológica y pruebas prolongadas, no al funcionamiento básico del prototipo presentado.
 
 En el Challenge #2 el protocolo se amplió a los bloques que exige el enunciado (calibración, emulación acelerada, fusión, notificación, robustez y desempeño). Su valor principal estuvo en que **encontró fallas reales que se corrigieron**: la saturación del índice evaporativo con sol real en modo demo, el falso positivo de CRÍTICO por evaporación con el tubo lleno, el tablero que no se recuperaba tras una caída de la WLAN y el tono de crítico que el buzzer no podía reproducir.
+
+---
+
+## 6.6 Autoevaluación del protocolo del Challenge #3
+
+| Criterio del enunciado | ¿Se cumple? | Evidencia / observación |
+|---|---|---|
+| Medición y transmisión en hilos independientes del principal | ✅ Sí | `tareaMedicion` y `tareaMqtt` (sección 3.21); con el broker caído la alarma local siguió igual (prueba 9) |
+| Datos almacenados en una base local antes de la nube (SQLite) | ✅ Sí | El gateway guarda cada mensaje antes de procesarlo; la nube sale de `cola_nube` (pruebas 1 y 2) |
+| Procesamiento local en el gateway | ✅ Sí | Validación por variable, anomalías con z robusto, ventanas de 60 s, vigilancia del enlace. Detectó en real las 59 lecturas imposibles del BME280 |
+| MQTT dispositivo ↔ gateway y gateway ↔ nube | ✅ Sí | Mosquitto local y Ubidots por MQTT con TLS |
+| Tablero global con valor actual, histórico y alertas | ✅ Sí | Tablero de Ubidots con medidor, gráficas, estado, tabla de la IA y switch |
+| Notificaciones ante eventualidades | ✅ Sí | Eventos de Ubidots (SMS hasta agotar el cupo, correo) y avisos por Telegram |
+| Desactivar la alarma física desde la nube | ✅ Sí | Switch de Ubidots → `ok: 1` (prueba 4) |
+| Acceso restringido a usuarios autorizados | ✅ Sí | Broker con usuario, clave y ACL; Ubidots privado; bot con clave y aprobación |
+| Módulo de IA (predicción, anomalías o recomendación) | ✅ Sí | Regresión propia (minutos hasta el 15 %), anomalías en el gateway y recomendación con Claude, con respaldo por reglas |
+| Caída de Internet: datos guardados y enviados después | ✅ Sí | En la Pi: corte de 8 min de la red y corte de Internet; 10 mensajes guardados en SQLite y subidos con su hora al volver, cola en 0 (prueba 7) |
+| Latencia de extremo a extremo medida | ✅ Sí | Gateway → Ubidots: mediana 0,8 s; cambio de estado → Telegram: unos 2 s; ESP32 caído detectado en 20,5–21 s; silenciar: 15–56 ms (pruebas 4, 8 y 10) |
+| Funcionamiento en la Raspberry Pi | ✅ Sí | 13/11/2026: Raspberry Pi 5 instalada con un solo script en unos 10 min; 4 horas de operación con el prototipo real (1477 mediciones) |
+
+**Fortalezas.** Las pruebas se hicieron primero con un simulador, luego con el prototipo real y un PC como gateway, y por último en la Pi, para que cada falla tuviera una sola causa posible. Las pruebas automáticas del gateway (22) cubren los casos difíciles de reproducir a mano, como un switch viejo de Ubidots o una clave errada en el bot. Las pruebas reales encontraron tres fallas que la simulación no mostraba (sección 5.8) y quedaron corregidas.
+
+**Limitaciones.** No hubo prueba de larga duración (horas o días) del gateway. La latencia se midió con las marcas de tiempo del gateway y no con un cronómetro externo, así que no incluye el tramo ESP32 → gateway dentro de la misma WLAN. La orden de silenciar desde la consola de la Pi no se alcanzó a ejecutar. Si el gateway se apaga, los mensajes de ese intervalo no se recuperan: Mosquitto no los guarda para el gateway (ver 7.3).
 
 ---
 
