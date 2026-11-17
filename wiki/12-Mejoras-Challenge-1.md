@@ -14,19 +14,6 @@ Las observaciones principales fueron:
 
 También se pidieron más referencias de los últimos 5 años y los datasheets de los componentes.
 
-La revisión del Challenge #1 (registrada en la hoja de trabajo del equipo) señaló además:
-
-| Deficiencia / retroalimentación | Acción de mejora | Evidencia |
-|---|---|---|
-| **Contradicción:** la Wiki decía "100 % en simulación" y el video mostraba una maqueta física | Narrativa única: simulación (Ch. #1, etapa 1) → maqueta física (Ch. #1, etapa 2) → producto en carcasa (Ch. #2). Se sincronizó la carpeta `/wiki` del repositorio con la Wiki de GitHub | Secciones 1.4, 2.16 y 5.1; la frase "100 % en simulación" ya no aparece |
-| **Wiki vs. código:** OLED vs. LCD 16×2, pp/h vs. pp/min, portada "Equipo 1" | La pantalla es la LCD 16×2 en todo el texto (la OLED solo se menciona como componente de la simulación); la tasa se expresa en pp/min (la tabla en pp/h de la Sección 5.4 se conserva como evidencia histórica, con nota); la portada dice "Equipo 2" | Secciones 0, 3.10, 5.4 y 9.1; trazabilidad Wiki ↔ código en la [Sección 3.20](03-Desarrollo-Modular.md) |
-| **Referencias solo del enunciado** | Lista IEEE con datasheets, artículos de los últimos 5 años y normativa, citada en el texto | [Sección 7.5](07-Conclusiones-Trabajo-Futuro.md) |
-| **IA sin prompts ni validación** | Sección de IA con las herramientas, el uso en cada etapa (incluido el desarrollo del firmware con Claude Code), los mecanismos de validación y el porcentaje de la Wiki | [Sección 8](08-Uso-de-IA.md) |
-| **Restricciones regulatorias y temporales incompletas** | Tabla de restricciones con RETIE, RAS, IEC 60529, Ley 1523, Ley 1581, uso del espectro, plazos y muestreo | [Sección 2.2](02-Solucion-Propuesta.md) |
-| **Faltaban pruebas de borde y de recuperación** | Matriz de 12 escenarios con valores exactos sobre los umbrales y la recuperación crítico → normal | [Sección 5.7.4](05-Configuracion-Experimental-Resultados.md) |
-| **Una sola acta** | Acta de seguimiento del Challenge #2 con temas, compromisos y cumplimiento | [Sección 9.7](09-Equipo-Roles.md) |
-| **Sustentación oral (2/4): el video hablaba del prototipo en futuro** | Video del Ch. #2 centrado en el prototipo real funcionando; pitch para *stakeholders* ensayado y banco de preguntas probables | [Video del Challenge #2](https://youtu.be/H0U9AYJEdTg) |
-
 | Elemento | Challenge #1 | Challenge #2 | Dónde |
 |---|---|---|---|
 | Pesos del riesgo | 50/30/20, criterio del equipo | **54/30/16**, vector del **AHP** de Saaty [18] con CR = 0.008, el método usado en índices compuestos de sequía [19] | [3.2.5](03-Desarrollo-Modular.md) |
@@ -37,7 +24,7 @@ La revisión del Challenge #1 (registrada en la hoja de trabajo del equipo) señ
 | Índice evaporativo | 50 % irradiancia + 50 % VPD, sin respaldo | **Priestley-Taylor** [5] con **FAO-56** [6] + 30 % de VPD justificado con Jansen et al. [11]; cada constante con su fuente | [3.2.3](03-Desarrollo-Modular.md) |
 | Efecto de la altitud | Factor fijo ≈ 1.10 sobre la irradiancia | La presión medida entra directamente en γ y en Δ/(Δ+γ) | [3.2.3](03-Desarrollo-Modular.md) |
 | Gestión de alarmas | Banda muerta y confirmación sin cita | Citadas a ANSI/ISA-18.2 [16] y EEMUA 191 [17] | [3.2.8](03-Desarrollo-Modular.md) |
-| Referencias | Sin lista de referencias en la Wiki del repositorio | 37 referencias en formato IEEE, incluidas publicaciones de 2021 a 2024, los datasheets y la normativa colombiana aplicable | [7.5](07-Conclusiones-Trabajo-Futuro.md) |
+| Referencias | Sin lista de referencias en la Wiki del repositorio | 31 referencias en formato IEEE, incluidas publicaciones de 2021 a 2024 y los datasheets | [7.5](07-Conclusiones-Trabajo-Futuro.md) |
 | Supuestos | Implícitos | Declarados uno por uno (G ≈ 0, Rnl sobre agua, Ra fijo, modo demo, umbrales de evaporación) | [3.2.3](03-Desarrollo-Modular.md), [6.3](06-Autoevaluacion-Pruebas.md) |
 
 ## 12.2 Deficiencias técnicas detectadas y corregidas
@@ -61,30 +48,6 @@ Para no presentar como resuelto lo que no lo está:
 - **Umbrales de evaporación con datos locales:** el método está citado, pero no se aplicó con datos del IDEAM.
 - **Calibración de la irradiancia con un instrumento de referencia.**
 - **Validación en un embalse real** y pruebas prolongadas.
-
-## 12.4 Plan de trabajo vs. lo implementado
-
-La hoja de trabajo del equipo fijó un plan al inicio del Challenge #2. Esta tabla registra en qué se apartó la implementación final y por qué.
-
-| Elemento | Plan (hoja de trabajo) | Implementado | Motivo |
-|---|---|---|---|
-| Medición concurrente | *Timer* de hardware (ISR) que libera un semáforo + tarea en el núcleo 0 | Tarea de FreeRTOS en el núcleo 0 con periodo fijo (`vTaskDelayUntil`), sin ISR | Cumple la restricción ("hilo distinto al principal") con menos código; no hace falta ISR porque no hay sensores por pulsos |
-| Caudal | Caudalímetro YF-S201 contado en una ISR, en la fusión | No implementado | La fusión usa nivel, evaporación y tasa de descenso; la tasa de descenso ya refleja la salida de agua sin otro sensor |
-| Sensor de nivel | JSN-SR04T impermeable | HC-SR04 dentro del tubo de PVC | El tubo protege el sensor y estabiliza la superficie |
-| Velocidad del sonido | Compensada con la temperatura del BME280 | Constante (343 m/s) | Trabajo futuro |
-| Servidor web | ESPAsyncWebServer, páginas en LittleFS, actualización por SSE o WebSocket | `WebServer` síncrono en `loop()`, páginas embebidas en el firmware, consulta periódica (2 s / 5 s) con cancelación por tiempo | Sin dependencias externas; las alarmas van en su propia tarea, así que el servidor nunca las bloquea |
-| Gráficas | Librería de gráficas local | Gráficas dibujadas con `<canvas>` | Sin librerías ni Internet |
-| Acceso | WPA2 + lista blanca de IP (reservas DHCP) + login; roles operador y administrador | WPA2 + misma subred + login con sesión; un solo usuario; registro de inicios de sesión e intentos fallidos | El hotspot de celular no permite reservas DHCP; los roles quedan como trabajo futuro |
-| Histórico | 24 h (1 punto/min) en RAM con volcado a LittleFS y hora por NTP | 10 min en RAM (1 punto cada 2 s), tiempo relativo al arranque | Suficiente para la demostración; la persistencia queda como trabajo futuro |
-| Calibración | Archivo de configuración en LittleFS | Flash NVS (`Preferences`), editable desde el tablero | Más simple y robusto para pocos parámetros |
-| Pesos del riesgo | 50/30/20 justificados con fuente | 54/30/16 del AHP | El método citado da 54/30/16 |
-| Recuperación de estado | Histéresis para bajar | Confirmación asimétrica (3 ciclos para bajar) y escalera de un peldaño | Evita la oscilación con el mismo efecto |
-| LCD | Pantallas rotativas con botón | Rotación automática de 7 páginas, sin botón | Una entrada física menos en un equipo cerrado |
-| BME280 | Brazo lateral con protector de radiación | Techo con rejillas sobre la carcasa | Integrado en la impresión 3D |
-| Carcasa | Caja IP65 comercial o impresa en PETG/ASA, PCB perforada, prensaestopas | Carcasa impresa en PETG, electrónica en mini protoboard | La impresión permitió integrar el acople al tubo de PVC y el techo del BME280 en la misma carcasa; el grado IP no se ensayó |
-| Alimentación | Red 5 V con respaldo 18650 (TP4056 + MT3608) y panel solar | Portapilas 4×AA alcalinas Duracell con interruptor y 2 diodos 1N4007 en serie | Permite alimentar el prototipo sin cable; los diodos bajan los ≈ 6 V de las pilas nuevas |
-| Medición de consumo | INA219 adicional en la entrada | No implementado: el único INA219 mide la corriente del panel (irradiancia) | El consumo y la autonomía quedan como trabajo futuro (Sección 12.3) |
-| Seguimiento solar | No en el prototipo (panel fijo horizontal como sensor) | No implementado, como se decidió | El panel es el sensor de radiación global horizontal |
 
 ---
 

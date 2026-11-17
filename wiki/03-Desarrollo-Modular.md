@@ -864,7 +864,7 @@ Todo queda en el monitor serial como evidencia.
 
 ### Carcasa
 
-Diseñada en CadQuery e impresa en PETG, en seis piezas: prueba de ajuste del tubo, acople al tubo, tapa, caja, piso intermedio y techo del BME280. La caja mide 136 × 110 × 73 mm (interior 130 × 104 × 70 mm). El BME280 va bajo un techo con rejillas, a la sombra y ventilado, como pide la buena práctica meteorológica para medir temperatura y humedad del aire. Los STL de las seis piezas, el script CadQuery y las vistas previas de la versión publicada (v16) están en [`/Carcasa_3D_/Carcasa_3D_v16`](https://github.com/jorgis857/sistema-alerta-temprana-riesgo-hidrico/tree/main/Carcasa_3D_/Carcasa_3D_v16).
+Diseñada en CadQuery e impresa en PETG, en seis piezas: prueba de ajuste del tubo, acople al tubo, tapa, caja, piso intermedio y techo del BME280. La caja mide 136 × 110 × 73 mm (interior 130 × 104 × 70 mm). El BME280 va bajo un techo con rejillas, a la sombra y ventilado, como pide la buena práctica meteorológica para medir temperatura y humedad del aire. Los STL y el script de CadQuery de la versión impresa están en [`/Carcasa_3D_/Carcasa_3D_v16`](https://github.com/jorgis857/sistema-alerta-temprana-riesgo-hidrico/tree/main/Carcasa_3D_/Carcasa_3D_v16).
 
 ### Sensor de nivel en tubo
 
@@ -878,7 +878,7 @@ El HC-SR04 va dentro de un tubo de **PVC sanitario de 3"** (diámetro exterior �
 | 5 V | `VIN` | HC-SR04, buzzer, LEDs, LCD |
 | 3.3 V | Pin `3V3` del ESP32 | BME280, INA219 |
 
-Usamos un portapilas con 4 pilas AA alcalinas Duracell de 1.5 V, junto con 2 diodos 1N4007 en serie para alimentar el prototipo sin necesidad de un cable de alimentación. Usamos los diodos para limitar el voltaje y que no fueran 6 V. Para programar por USB, el interruptor va en OFF.
+Usamos un portapilas con 4 pilas AA recargables Duracell de 1.5V, junto con 2 diodos 1N4007 en serie para alimentar el prototipo sin necesidad de un cable de alimentación. Usamos los diodos para limitar el voltaje y que no fueran 6 V. Para programar por USB, el interruptor va en OFF.
 
 ### Mapa de pines (ESP32 DevKit de 38 pines)
 
@@ -886,7 +886,7 @@ Usamos un portapilas con 4 pilas AA alcalinas Duracell de 1.5 V, junto con 2 dio
 |---|---|---|
 | `GPIO 21 (SDA)` · `GPIO 22 (SCL)` | BME280, INA219, LCD | Bus I²C |
 | `GPIO 5` | TRIG del HC-SR04 | Disparo del pulso ultrasónico |
-| `GPIO 18` | ECHO del HC-SR04 | Recepción del eco; el diseño usa un divisor resistivo de 1 kΩ / 2 kΩ para bajar los 5 V del ECHO a 3.3 V |
+| `GPIO 18` | ECHO del HC-SR04 | Recepción del eco. Falta verificar si lleva divisor resistivo: el HC-SR04 alimentado a 5 V entrega 5 V en el ECHO, y el ESP32 trabaja a 3.3 V |
 | `GPIO 25` · `GPIO 26` · `GPIO 27` | LED verde · amarillo · rojo (ánodo común) | Estado |
 | `GPIO 19` | Buzzer pasivo | Alarma sonora (PWM) |
 | `VIN` · `3V3` · `GND` | Ver tabla de alimentación | Alimentación y tierra común |
@@ -895,40 +895,234 @@ En el Challenge #2 se retiró el botón físico de silencio del Challenge #1: el
 
 ---
 
-## 3.20 Trazabilidad Wiki ↔ código
+## 3.21 Firmware v8: comunicación MQTT en un hilo propio (Challenge #3)
 
-Todos los valores de esta Wiki salen de `firmware/wrews/wrews.ino` (firmware v7). La tabla indica el nombre de cada constante o función, para buscarla en el código (los números de línea cambian entre versiones). Las marcadas como editables se cambian desde el tablero y se guardan en la flash; el valor indicado es el de fábrica.
+El firmware v8 conserva toda la lógica del v7 y agrega un **cuarto hilo** de FreeRTOS para la comunicación con el gateway, con la librería PubSubClient [32]:
 
-| Concepto | Constante / función | Valor | Sección |
-|---|---|---|---|
-| Distancias de lleno / vacío (editables) | `D_LLENO_DEF`, `D_VACIO_DEF` | 3 / 20 cm | 3.2.1, 3.17 |
-| Mediana del ultrasónico | `leerDistancia()` | 5 ecos, velocidad del sonido 343 m/s | 3.6 |
-| Constante del panel (editable) | `K_PANEL_DEF` | 10 (W/m²)/mA | 3.2.3 |
-| Cero del panel | `OFFSET_MAX_MA` | solo si < 1 mA | 3.18, 5.5.1 |
-| Priestley-Taylor | `priestleyTaylor()`, `ALPHA_PT` | α = 1.26 | 3.2.3 |
-| Albedo, λ, σ | `ALBEDO_AGUA`, `LAMBDA_MJ_KG`, `SIGMA_MJ` | 0.06, 2.45 MJ/kg, 4.903·10⁻⁹ | 3.2.3 |
-| Altitud y Ra | `ALTITUD_M`, `RA_FIJO_MJ` | 2560 m, 36 MJ/m²·día | 3.2.3 |
-| ET de referencia (editable) | `ET_REF_DEF` | 7.5 mm/día | 3.2.3 |
-| Ventana de evaporación | `VENTANA_CAMPO_S`, `VENTANA_DEMO_DEF` (editable), `NUM_BUCKETS`, `COBERTURA_MIN` | 24 h, 120 s, 24, 50 % | 3.2.3 |
-| Modo demo (índice de claridad) | `evaluarVentana()`, `gPicoDespejado()`, `N_HORAS_SOL` | G_pico ≈ 1049 W/m², 12 h | 3.2.3 |
-| Índice evaporativo | `indiceEvaporativo()`, `W_PT`, `W_VPD`, `VPD_REF_KPA` | 0.7 / 0.3, 2.0 kPa | 3.2.3 |
-| Tasa de descenso | `calcularTasa()`, `VENTANA_N`, `MIN_MUESTRAS`, `TASA_REF` | 20 muestras, 6 mínimas, 100 pp/min | 3.2.4 |
-| Banda muerta | `caracterizarRuido()`, `BANDA_MANUAL` | 3·SE; respaldo 5 pp/min | 3.2.4, 5.5.1 |
-| Salto de discontinuidad (editable) | `SALTO_DEF` | 8 pp | 3.2.4 |
-| Pesos del riesgo | `W_NIVEL`, `W_EVAP`, `W_TASA` | 0.54 / 0.30 / 0.16 | 3.2.5 |
-| Umbrales de nivel | `U_PREC_NIVEL`, `U_CRIT_NIVEL` | 50 / 15 % | 3.2.7 |
-| Umbrales de riesgo | `U_PREC_RIESGO`, `U_CRIT_RIESGO` | 36.2 / 69.2 | 3.2.7 |
-| Umbrales de evaporación | `U_PREC_EVAP`, `U_CRIT_EVAP` | 60 / 85 | 3.2.7 |
-| Umbrales de tasa (editables) | `U_PREC_TASA_DEF`, `U_CRIT_TASA_DEF` | 33 / 68 pp/min | 3.2.7 |
-| Tope de la evaporación | `calcularObjetivo()` (`s_evap_estado`) | máximo PRECAUCIÓN | 3.2.6 |
-| Escalera y confirmación | `aplicarEstado()`, `CONF_SUBIR`, `CONF_BAJAR` | 2 / 3 ciclos | 3.2.8 |
-| Periodo de medición | `T_MUESTREO_MS`, `tareaMedicion()` | 1 s | 3.14 |
-| Patrones de alarma | `PAT`, `BUZ_HZ`, `tareaAlarmas()` | 1000 / 2000 / 600 Hz | 3.8 |
-| Silencio | `silenciarAlarma()`, `SILENCIO_MS` | 15 min | 3.8, 3.16 |
-| Historial del tablero | `N_HIST`, `HIST_CADA` | 300 puntos, 1 cada 2 s | 3.16 |
-| Sesiones | `SESION_MS`, `N_SESIONES`, `MAX_FALLOS_LOGIN`, `BLOQUEO_LOGIN_MS` | 12 h, 4, 5 intentos, 30 s | 3.16 |
-| Reconexión Wi-Fi | `vigilarWiFi()`, `WIFI_REINTENTO_MS` | 30 s | 3.15 |
-| Calibración en flash | `cargarParametros()`, `guardarParametros()`, `validarParametros()` | — | 3.17 |
+| Hilo | Núcleo | Prioridad | Periodo | Responsabilidad |
+|---|---|---|---|---|
+| `tareaMedicion` | 0 | 2 | 1 s | Sensores, modelo, estado, historial y eventos (igual que en v7) |
+| `tareaMqtt` **(nuevo)** | 0 | 1 | 50 ms | Conexión al broker; publica telemetría (cada 5 s), estado (al cambiar) y eventos; recibe la orden de silenciar y la recomendación de la IA |
+| `tareaAlarmas` | 1 | 2 | 10 ms | LEDs y buzzer |
+| `loop()` | 1 | 1 | continuo | Servidor web, Wi-Fi, LCD y búsqueda del gateway por mDNS |
+
+Reglas de concurrencia:
+
+- **La librería MQTT solo se usa dentro de `tareaMqtt`**: PubSubClient no es segura entre hilos.
+- `tareaMqtt` toma `mtx_estado` **solo para copiar** los datos, y lo suelta **antes** de usar la red. Conectarse o publicar puede tardar segundos, y en ese tiempo la medición y la alarma no esperan.
+- `tareaMqtt` **nunca toma `mtx_i2c`** ni toca los pines. Se mantiene el orden fijo de los candados del v7.
+- Corre con prioridad 1, por debajo de la medición (2): si el broker no responde, los reintentos no le quitan tiempo de CPU a la medición.
+
+Otros mecanismos del v8:
+
+- **Última voluntad (LWT):** al conectarse, el ESP32 le deja al broker el mensaje `offline` retenido en `wrews/<id>/disponibilidad`. Si se apaga o pierde la red, el broker lo publica por él; con *keepalive* de 15 s, el gateway se entera en ~22 s como máximo.
+- **Eventos sin pérdida:** si el broker estuvo caído, al reconectar se publican los eventos que sigan en el registro circular (los 24 últimos). El gateway los guarda con su `id` y el identificador de arranque (`boot`) y descarta los repetidos.
+- **Gateway por nombre:** `MQTT_HOST` puede ser una IP o un nombre `.local`. Con un nombre, `loop()` lo resuelve por mDNS y lo vuelve a buscar si la conexión falla, así el ESP32 sigue al gateway aunque el hotspot le cambie la IP. La búsqueda va en `loop()` porque es el hilo que reinicia el mDNS al volver el Wi-Fi.
+- **Filtro de plausibilidad del BME280:** una lectura fuera de rango físico (temperatura fuera de −10 a 60 °C, humedad fuera de 0 a 100 %, presión fuera de 500 a 1100 hPa) se descarta y se conservan los últimos valores válidos; no entra a la ventana de evaporación. Cinco lecturas imposibles seguidas llevan a **FALLO** ("BME280 con lecturas imposibles"). Ver el incidente en [5.8](05-Configuracion-Experimental-Resultados.md).
+
+## 3.22 Gateway: arquitectura del servicio (Challenge #3)
+
+El gateway es un servicio en Python (`wrews-gateway`, systemd) que arranca solo con la Raspberry Pi. Sus hilos:
+
+| Hilo | Qué hace |
+|---|---|
+| Red local (paho-mqtt [33]) | Recibe los mensajes del ESP32 y los pone en una cola en memoria |
+| Trabajador | Saca cada mensaje, **lo guarda en SQLite** y luego lo procesa |
+| Periódico (1 s) | Cierra las ventanas de agregación y vigila el enlace con el ESP32 |
+| Nube | Vacía la cola de SQLite hacia Ubidots, del más viejo al más nuevo |
+| IA | Predicción y recomendación (la consulta al LLM puede tardar: va aparte) |
+| Red Ubidots (paho) | Conexión TLS con Ubidots; recibe el switch de silenciar |
+| Telegram (3 hilos) | Envía avisos, atiende comandos y actualiza el dashboard en vivo |
+
+El trabajador y el periódico comparten el estado del enlace y el agregador, y lo tocan siempre con un candado.
+
+**Esquema de SQLite [34]** (comentado en `gateway/wrews_gw/almacen.py`):
+
+| Tabla | Contenido |
+|---|---|
+| `mediciones` | Cada telemetría tal como llegó (JSON crudo) más sus columnas, la hora de llegada y la marca de anomalía |
+| `estados` | Cada cambio de estado, con su origen (`esp32`, o `gateway` cuando el FALLO lo declara el gateway) |
+| `eventos` | Eventos del ESP32 y del gateway; clave única (`dispositivo`, `boot`, `id`) para descartar reenvíos |
+| `comandos` | Órdenes enviadas al ESP32 (origen, acción) y su respuesta |
+| `agregados` | Resumen de cada ventana: media, mínimo, máximo y completitud |
+| `ia` | Cada predicción y recomendación, **con el prompt exacto** enviado al modelo, el proveedor, la latencia y el error si lo hubo |
+| `suscriptores` | Autoridades del bot de Telegram y si el administrador las aprobó |
+| `cola_nube` | Lo que debe subir a Ubidots; `enviado_ms` en vacío significa pendiente |
+
+## 3.23 Procesamiento local en el gateway (Challenge #3)
+
+1. **Validación por variable.** Cada variable se compara con su rango físico. Una variable imposible se descarta **sola**: la muestra sigue valiendo para las demás, sobre todo para el nivel.
+2. **Anomalías del nivel con z robusto.** Se mira la *diferencia* con la muestra válida anterior, no el valor, para que un descenso sostenido no se confunda con un pico. Con las últimas 20 diferencias:
+
+   ```text
+   z = |d − mediana(d)| / máx(1.4826 × MAD, 1)
+   ```
+
+   donde MAD es la mediana de las desviaciones absolutas respecto a la mediana. La muestra es anómala si z > 4 **y** el salto supera 10 pp. Tres muestras seguidas en el nuevo valor se aceptan como un escalón real (recarga o reposicionamiento). La mediana y el MAD no se dejan arrastrar por los propios picos, como sí pasaría con la media y la desviación estándar.
+3. **Agregación por ventanas de 60 s.** Media, mínimo y máximo de cada variable y **completitud** (muestras recibidas sobre las esperadas). Es lo que se sube a Ubidots: una muestra por minuto en vez de doce, dentro de los límites del plan gratuito.
+4. **Vigilancia del enlace.** Si pasan más de 20 s sin telemetría, o el broker publica la última voluntad del ESP32, el gateway declara **FALLO con origen `gateway`** y lo sube a Ubidots, porque el ESP32 ya no puede avisar por sí mismo.
+
+## 3.24 Puente con Ubidots (Challenge #3)
+
+- **Conexión:** MQTT sobre TLS al puerto 8883 de `industrial.api.ubidots.com` [35]. El certificado (Let's Encrypt) se valida con el almacén del sistema. El token de Ubidots es el usuario MQTT y nunca viaja en claro.
+- **Formato:** `{"variable": {"value": x, "timestamp": ms, "context": {...}}}`. La marca de tiempo es la de la medición, así que lo que se envía tarde queda en su hora real.
+- **Store and forward:** todo lo que va a la nube pasa por `cola_nube`. Sin Internet, se acumula; al volver, se envía en orden, a un ritmo máximo de 2 mensajes por segundo, esperando la confirmación de Ubidots (QoS 1) antes de marcarlo como enviado.
+- **Bajada del switch `silenciar`:** el gateway está suscrito a la variable. Una orden con marca de tiempo **de menos de 2 minutos** y no ejecutada antes se reenvía al ESP32 por el broker local; luego el gateway devuelve el switch a 0. Así, una orden dada mientras la Pi estaba sin Internet se cumple al reconectar, y un 1 viejo guardado en Ubidots no silencia la alarma por error.
+
+| Variable en Ubidots | Qué es |
+|---|---|
+| `nivel`, `riesgo`, `tasa`, `idx_evap`, `temp` | Media de la ventana de 60 s (mínimo y máximo en el *context*) |
+| `estado` | 0 NORMAL, 1 PRECAUCIÓN, 2 CRÍTICO, 3 FALLO (*context*: origen y motivo) |
+| `silenciado` | 1 si el buzzer está silenciado |
+| `gw_calidad` | Completitud de la ventana (0 % si el ESP32 no envía) |
+| `ia_min_critico` | Minutos estimados hasta el 15 % (−1 si no baja); la recomendación va en el *context* |
+| `silenciar` | Switch del tablero para desactivar la alarma física |
+
+## 3.25 Módulo de inteligencia artificial (Challenge #3)
+
+El módulo tiene **dos partes, separadas a propósito**:
+
+**1. Predicción propia (sin costo, sin Internet).** Regresión lineal por mínimos cuadrados del nivel en los últimos 10 minutos (mínimo 8 puntos y 40 s de historia):
+
+```text
+Nivel(t) ≈ m × t + b                          (mínimos cuadrados, t en minutos)
+Minutos hasta el 15 % = (Nivel actual − 15) / (−m)     solo si m < −0.5 pp/min
+```
+
+Entrega la pendiente m (pp/min), el R² y los **minutos estimados hasta el umbral crítico del 15 %**. Si |m| < 0.5 pp/min la tendencia se considera estable. Corre en la Pi, se guarda en SQLite y se publica en Ubidots (`ia_min_critico`).
+
+**2. Recomendación en lenguaje natural (Claude, a pedido).** Cuando una autoridad escribe `/recomendacion` en el bot, el gateway arma un prompt con el estado, la predicción, los índices y los últimos eventos, y lo envía a **Claude** (`claude-opus-5-5`, Anthropic [36]) por su API, con esfuerzo bajo. El modelo devuelve una recomendación de máximo 55 palabras para la alcaldía (racionamiento por sectores, priorización de hospitales y colegios, comunicación a la población, revisión de fugas).
+
+Decisiones de diseño:
+
+- **El modelo no calcula nada.** Recibe los números ya calculados y el prompt le prohíbe inventar cifras y le pide decir que la tendencia es incierta si R² < 0.5. Una alucinación no puede cambiar el valor que se reporta.
+- **Respaldo por reglas.** Sin Internet, sin créditos o con la clave mala, responde una tabla de decisiones a partir del estado y la predicción. El sistema nunca se queda sin recomendación.
+- **Solo a pedido.** Lo automático (al cambiar el estado) usa la tabla de reglas, que es gratis. El modelo se consulta cuando alguien lo pide, como máximo una vez por minuto: si varias autoridades lo piden a la vez, reciben la misma respuesta. Costo medido: ~700 tokens de entrada y ~750 de salida por consulta, unos USD 0,02.
+- **Trazabilidad.** Cada recomendación queda en la tabla `ia` con el prompt exacto, el modelo, la latencia y el motivo del respaldo si lo hubo, y se publica en el tablero local, en Ubidots y en Telegram.
+
+**¿Por qué un LLM y no solo reglas?** La predicción numérica resuelve el "cuándo"; el modelo de lenguaje traduce esos números a una acción concreta para personas que no son técnicas, teniendo en cuenta el conjunto (estado, tendencia, evaporación y eventos recientes), lo que una tabla de reglas fija no puede hacer.
+
+## 3.26 Canal móvil por Telegram (Challenge #3)
+
+Complementa al tablero global. El gateway atiende un bot de Telegram [37] (`@WREWS_Alertasbot`):
+
+| Comando | Qué hace | Costo |
+|---|---|---|
+| (automático) | Aviso en cada cambio de estado, con el último dato y una recomendación por reglas | Gratis |
+| `/dashboard` | Tablero completo en una imagen: tarjetas de estado y variables, gráficas de la última hora y la última recomendación. Lo dibuja el gateway con SQLite y matplotlib [38] | Gratis |
+| `/envivo` | Fija ese dashboard arriba del chat y lo reemplaza cada 60 s y apenas cambia el estado | Gratis |
+| `/grafica`, `/estado` | Gráfica rápida de nivel y riesgo, y resumen en texto | Gratis |
+| `/tablero` | Enlace al tablero de Ubidots (pide iniciar sesión) | Gratis |
+| `/recomendacion` | Análisis de Claude con los datos actuales | ~USD 0,02 |
+
+**Acceso restringido en dos pasos:**
+1. **Clave de registro:** solo quien escribe `/start CLAVE` (o abre el enlace con la clave) puede pedir acceso. Con 5 claves erradas, el chat queda bloqueado 10 minutos.
+2. **Aprobación del administrador:** la solicitud le llega al administrador con los botones **Aprobar** y **Rechazar**. Solo los aprobados reciben alertas y pueden usar los comandos. El administrador ve la lista con `/usuarios` y puede retirar un acceso.
+
+## 3.27 Seguridad por capas (Challenge #3)
+
+| Capa | Mecanismo |
+|---|---|
+| Tablero local | Misma subred + usuario y clave + sesión con token aleatorio de 128 bits (Challenge #2) |
+| Broker MQTT | Sin acceso anónimo; usuario y clave por equipo (`esp32`, `gateway`, `monitor`); ACL por usuario: el ESP32 solo publica sus datos y solo lee comandos y la recomendación; el usuario `monitor` solo lee |
+| Gateway → Ubidots | TLS 1.2/1.3 con validación del certificado |
+| Tablero global | Cuenta privada de Ubidots; no se usa el enlace público |
+| Telegram | Clave de registro + aprobación del administrador |
+| Secretos | Claves solo en `secrets.h` (ESP32) y `/etc/wrews/gateway.env` (permisos 640): ninguno se sube al repositorio |
+
+**Limitación declarada:** el tramo ESP32 ↔ Mosquitto va por MQTT sin TLS dentro de la WLAN, protegido por el cifrado WPA2 de la red. Ver trabajo futuro en [7.3](07-Conclusiones-Trabajo-Futuro.md).
+
+## 3.28 Diagramas UML del Challenge #3
+
+### 3.28.1 Secuencia: desactivar la alarma física desde Ubidots
+
+```mermaid
+sequenceDiagram
+    actor A as Autoridad
+    participant U as Ubidots
+    participant G as Gateway (Pi)
+    participant M as Mosquitto
+    participant E as ESP32 (tareaMqtt)
+    participant L as tareaAlarmas
+    A->>U: Activa el switch "silenciar"
+    U-->>G: silenciar = 1 (con marca de tiempo)
+    G->>G: ¿orden de menos de 2 min y no repetida?
+    G->>M: publica wrews/wrews-01/cmd {"accion":"silenciar","origen":"Ubidots"}
+    M->>E: entrega el comando
+    E->>E: silenciarAlarma() con mtx_estado
+    E->>M: cmd/resp {"ok":1,"estado":"PRECAUCION"}
+    M->>G: respuesta
+    G->>G: guarda orden y respuesta en SQLite (comandos)
+    G->>U: silenciar = 0 (el switch vuelve solo)
+    L->>L: siguiente ciclo (10 ms): buzzer apagado, LEDs siguen
+```
+
+### 3.28.2 Secuencia: del dato a la nube, con caída de Internet
+
+```mermaid
+sequenceDiagram
+    participant E as ESP32
+    participant G as Gateway
+    participant D as SQLite
+    participant U as Ubidots
+    E->>G: telemetría (cada 5 s, MQTT)
+    G->>D: guarda la medición (primero)
+    G->>G: valida y agrega a la ventana
+    Note over G: cada 60 s
+    G->>D: guarda el agregado y lo encola en cola_nube
+    alt hay Internet
+        G->>U: publica (QoS 1, TLS)
+        U-->>G: confirmación
+        G->>D: marca como enviado
+    else sin Internet
+        Note over G,D: la cola crece; la alarma local sigue
+        G->>U: al volver: envía en orden con su hora original
+    end
+```
+
+### 3.28.3 Componentes del Challenge #3
+
+```mermaid
+flowchart TB
+    subgraph ESP32["ESP32 · wrews.ino (v8)"]
+        MED[tareaMedicion] --> EST[(estado compartido<br/>mtx_estado)]
+        ALA[tareaAlarmas] --> EST
+        MQT[tareaMqtt] --> EST
+        WEB[loop: servidor web, Wi-Fi, LCD, mDNS] --> EST
+    end
+    subgraph GW["Gateway · wrews_gw"]
+        GA[gateway.py] --> AL[almacen.py · SQLite]
+        GA --> PR[procesamiento.py]
+        GA --> NU[nube.py · Ubidots]
+        GA --> IAM[ia.py · regresión + LLM]
+        GA --> TE[telegram.py]
+        TE --> GR[grafica.py]
+    end
+    MQT <-- MQTT --> GA
+```
+
+
+## 3.29 Estándares aplicados en el Challenge #3
+
+| Estándar | Dónde se aplica |
+|---|---|
+| **MQTT 3.1.1** (OASIS, ISO/IEC 20922) [39] | Toda la comunicación dispositivo ↔ gateway ↔ Ubidots; QoS 1 hacia la nube; mensajes retenidos y última voluntad |
+| **TLS 1.2/1.3** (IETF RFC 8446) | Gateway ↔ Ubidots, gateway ↔ APIs de Claude y Telegram |
+| **ANSI/ISA-18.2** [16] | Gestión de alarmas: confirmación asimétrica, silencio que no apaga los LEDs, eventos con gravedad |
+| **Ley 1581 de 2012** [41] | Minimización de datos personales en el bot |
+
+## 3.30 Trazabilidad Wiki ↔ código (Challenge #3)
+
+| Sección | Archivo |
+|---|---|
+| 3.21 Hilo MQTT, LWT, mDNS, filtro BME280 | `firmware/wrews/wrews.ino` (sección "MQTT HACIA EL GATEWAY", `lecturaBmeValida`) |
+| 3.22 Servicio y SQLite | `gateway/wrews_gw/gateway.py`, `almacen.py` |
+| 3.23 Validación y ventanas | `gateway/wrews_gw/procesamiento.py` |
+| 3.24 Ubidots | `gateway/wrews_gw/nube.py` |
+| 3.25 IA | `gateway/wrews_gw/ia.py` |
+| 3.26 Telegram y dashboard | `gateway/wrews_gw/telegram.py`, `grafica.py` |
+| 3.27 Broker y permisos | `gateway/mosquitto/wrews.conf`, `wrews.acl`, `gateway/instalar.sh` |
+| Pruebas automáticas (22) | `gateway/tests/test_gateway.py` |
 
 ---
 

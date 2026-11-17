@@ -1,0 +1,20 @@
+# /etc/mosquitto/wrews.acl  -  quien puede leer o escribir cada topico
+# Cada usuario solo puede lo minimo que necesita.
+
+# El ESP32 publica sus datos y solo lee comandos y la recomendacion de la IA
+user esp32
+topic write wrews/+/telemetria
+topic write wrews/+/estado
+topic write wrews/+/eventos
+topic write wrews/+/disponibilidad
+topic write wrews/+/cmd/resp
+topic read  wrews/+/cmd
+topic read  wrews/+/ia/texto
+
+# El gateway lee todo y publica comandos, IA y su propio estado
+user gateway
+topic readwrite wrews/#
+
+# Cuenta de solo lectura para depurar con mosquitto_sub (opcional)
+user monitor
+topic read wrews/#

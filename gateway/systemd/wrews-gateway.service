@@ -1,0 +1,19 @@
+[Unit]
+Description=Gateway WREWS (MQTT local -> SQLite -> Ubidots + IA)
+After=network-online.target mosquitto.service
+Wants=network-online.target mosquitto.service
+# Wants y no Requires: con Requires, "systemctl stop mosquitto" detendria
+# tambien el gateway y no volveria solo. Asi el gateway sigue vivo, guarda
+# lo que pueda y se reconecta cuando el broker vuelve.
+
+[Service]
+Type=simple
+User=wrews
+EnvironmentFile=/etc/wrews/gateway.env
+WorkingDirectory=/opt/wrews/gateway
+ExecStart=/opt/wrews/venv/bin/python -m wrews_gw.gateway
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -2,7 +2,7 @@
 
 # 9. Equipo de trabajo: roles, actividades y contribuciones
 
-## 9.1 Integrantes — Equipo 2
+## 9.1 Integrantes — Equipo 1
 
 | Integrante | Rol principal | Correo / contacto |
 |---|---|---|
@@ -145,46 +145,40 @@ El resultado final es un **prototipo físico funcional** capaz de adquirir múlt
 
 ## 9.7 Contribuciones en el Challenge #2
 
-Roles definidos en la hoja de trabajo del Challenge #2:
-
-| Integrante | Rol | GitHub |
-|---|---|---|
-| **Mateo Ramírez Cabrera** | Hardware, integración en carcasa, alimentación, montaje y edición de video | [technologybyteo](https://github.com/technologybyteo) |
-| **Antonio Benítez Rueda** | Firmware: FreeRTOS, fusión, servidor web y tablero | [antobeni07](https://github.com/antobeni07) |
-| **Jorge Andrés Rodríguez Huertas** | Banco de pruebas, calibración, Wiki, video y gestión (actas) | [jorgis857](https://github.com/jorgis857) |
+Se mantuvieron los mismos roles principales.
 
 ### Mateo Ramírez Cabrera — Hardware, carcasa e integración
 
 - Diseño de la carcasa en CadQuery (iteraciones v11 a v17) y su impresión en PETG: caja, tapa, piso intermedio, techo ventilado del BME280 y acople al tubo de PVC.
 - Integración de los componentes en la carcasa y del sensor de nivel en el tubo de PVC.
 - Diseño de la alimentación por pilas con interruptor y distribución de las filas de 5 V y 3.3 V.
-- Edición del video de demostración.
 
 ### Antonio Benítez Rueda — Firmware, modelo y tablero de control
 
 - Firmware v6: modelo de evaporación de Priestley-Taylor con FAO-56, ventana móvil, pesos AHP, nuevos umbrales y autotest de referencia.
 - Firmware v7: tareas de FreeRTOS con mutex, Wi-Fi en modo estación con reconexión y dos redes, servidor web embebido, inicio de sesión, tablero con histórico, eventos y silencio de la alarma, y calibración desde el tablero guardada en flash.
 - Diagnóstico y corrección de las fallas encontradas en las pruebas (tono del buzzer, recuperación del tablero, saturación del índice con sol, falsos positivos por evaporación).
-- Integración en el firmware v6 de las hojas de referencias del modelo de evaporación y de pesos y umbrales, con cada constante citada a su fuente ([Ev n] y [Pe n]).
+- Hojas de referencias del modelo de evaporación y de pesos y umbrales.
 
 ### Jorge Andrés Rodríguez Huertas — Pruebas, documentación y video
 
-- Diseño y ejecución del banco de pruebas del Challenge #2.
+- Diseño y ejecución del banco de pruebas del Challenge #2 .
 - Actualización de la Wiki.
-- Guion y grabación del video.
+- Guion, grabación y edición del video.
 - Verificación matemática independiente de las cifras del tablero (VPD, nivel, riesgo hídrico y energía diaria equivalente) frente a las fórmulas documentadas.
 - Comparación de presión, temperatura y humedad del BME280 con instrumentos de referencia y registro de los errores obtenidos.
 - Gestión del repositorio y de la Wiki del Challenge #2 y coordinación de la entrega.
 
-### Acta de seguimiento del Challenge #2
+### Acta de reunión del Challenge #2
 
 | Campo | Detalle |
 |---|---|
 | **Proyecto** | WREWS — Water Risk Early Warning System — Challenge #2 |
-| **Periodo** | Cierre del Challenge #2, del 3 al 6 de octubre de 2026 (firmware v6 y v7, carcasa y Wiki en el repositorio) |
-| **Integrantes** | Mateo Ramírez Cabrera, Antonio Benítez Rueda, Jorge Andrés Rodríguez Huertas |
+| **Fecha de la reunión** | 04/10/2026 |
+| **Asistentes** | Mateo Ramírez Cabrera, Antonio Benítez Rueda, Jorge Andrés Rodríguez Huertas |
+| **Modalidad** | Presencial |
 | **Temas tratados** | 1. Alcance del Challenge #2: prototipo terminado en carcasa, medición en hilo independiente y tablero embebido en la WLAN, sin MQTT. 2. Retroalimentación recibida en el Challenge #1 y cómo abordarla. 3. Arquitectura del firmware v7: tareas de FreeRTOS con mutex, reconexión Wi-Fi, servidor web, inicio de sesión y calibración guardada en flash. 4. Modelo de evaporación (Priestley-Taylor con FAO-56), pesos AHP (54 / 30 / 16) y nuevos umbrales. 5. Fallas detectadas en las pruebas: saturación del índice con sol y falsos positivos por evaporación, que llevaron a acotar la evaporación a PRECAUCIÓN y al modo DEMO de la irradiancia. 6. Diseño de la carcasa (iteraciones v11 a v17), alimentación por pilas y acople al tubo de PVC. 7. Plan del banco de pruebas: calibración contra referencias, emulación acelerada y prueba de campo en el lago. 8. Documentación en la Wiki, video de demostración y entrega. |
-| **Compromisos y cumplimiento** | Mateo: carcasa, integración y alimentación — ✅ Cumplido (carcasa v16 en `Carcasa_3D_/`, prototipo armado). Antonio: firmware v6/v7, tablero y correcciones — ✅ Cumplido (firmware en `firmware/wrews/`). Jorge: banco de pruebas, Wiki, repositorio y video — ✅ Cumplido (Secciones 5 y 6, y video del Challenge #2). |
+| **Compromisos y cumplimiento** | Mateo: carcasa, integración y alimentación — ✅ Cumplido. Antonio: firmware v6/v7, tablero y correcciones — ✅ Cumplido. Jorge: banco de pruebas, Wiki, repositorio y video — ✅ Cumplido. |
 
 ### Autoevaluación de la contribución individual (Challenge #2)
 
@@ -193,6 +187,59 @@ Roles definidos en la hoja de trabajo del Challenge #2:
 | Mateo Ramírez Cabrera | **Experto** | Diseñó e imprimió la carcasa a lo largo de siete iteraciones, integró todos los módulos en un producto instalable sobre tubo, resolvió la alimentación por pilas con sus filas de 5 V y 3.3 V y participó en las pruebas de campo. |
 | Antonio Benítez Rueda | **Experto** | Desarrolló dos versiones mayores del firmware con tareas concurrentes, servidor web con autenticación, modelo de evaporación y calibración persistente, y corrigió las fallas que aparecieron en las pruebas. |
 | Jorge Andrés Rodríguez Huertas | **Experto** | Estructuró y publicó la documentación completa del Challenge #2, diseñó el banco de pruebas, verificó de forma independiente las cifras del tablero y coordinó el repositorio, el video y la entrega. |
+---
+
+## 9.8 Contribuciones en el Challenge #3
+
+| Integrante | Rol | GitHub |
+|---|---|---|
+| **Mateo Ramírez Cabrera** | Integración del sistema: firmware v8, gateway, módulo de IA y canal de Telegram | [technologybyteo](https://github.com/technologybyteo) |
+| **Jorge Andrés Rodríguez Huertas** | Despliegue en la Raspberry Pi, protocolo de pruebas y evidencias | [jorgis857](https://github.com/jorgis857) |
+| **Antonio Benítez Rueda** | Plataforma en la nube (Ubidots), arquitectura y UML, modelo de negocio, video y pitch | [antobeni07](https://github.com/antobeni07) |
+
+### Mateo Ramírez Cabrera — Integración: firmware, gateway e IA
+
+- Integración del firmware v8: hilo de comunicación MQTT con FreeRTOS, última voluntad, orden de silenciar desde la nube, filtro de plausibilidad del BME280 y búsqueda del gateway por mDNS.
+- Gateway en Python: almacenamiento en SQLite antes de reenviar, validación y anomalías, ventanas de agregación, vigilancia del enlace y puente MQTT/TLS con Ubidots.
+- Módulo de IA: regresión propia y recomendación con la API de Claude a pedido, con respaldo por reglas.
+- Bot de Telegram con clave y aprobación del administrador, dashboard en imagen y dashboard en vivo.
+- Pruebas con el prototipo real y un PC como gateway: silenciar desde Ubidots, ESP32 apagado, broker caído y diagnóstico de los incidentes de la sección 5.8.
+- Uso de Claude Code como asistente de desarrollo (ver sección 8.6).
+- Instalación del gateway en la Raspberry Pi y edición del video.
+
+### Jorge Andrés Rodríguez Huertas — Despliegue en la Raspberry Pi y validación
+
+- Preparación de la microSD de la Raspberry Pi en modo *headless* (hostname, usuario, Wi-Fi del hotspot y SSH), para que arrancara y se conectara sola en la universidad.
+- Participación en el despliegue y en el protocolo de pruebas de extremo a extremo en la Pi (sección 5.8, etapa 3), con capturas y consultas a SQLite como evidencia.
+- Grabación de la escena C del video: silenciar la alarma desde Ubidots y módulo de IA.
+- Revisión de los resultados de las secciones 5 y 6 de la Wiki.
+
+### Antonio Benítez Rueda — Nube, documentación y comunicación
+
+- Responsable del área de nube: revisión del tablero global en Ubidots (widgets, eventos de notificación y switch para silenciar) frente a los requisitos del enunciado.
+- Revisión de los diagramas de arquitectura y UML del Challenge #3 (secciones 2.18 y 3.28) frente al firmware y al gateway.
+- Revisión de la cotización del modelo de negocio y redacción de las nuevas fuentes de ingreso (sección 4.4).
+- Grabación de los clips de la persona B del video: operación normal y escalada de alarmas.
+- Preparación y presentación del pitch de la sustentación.
+
+### Acta de reunión del Challenge #3
+
+| Campo | Detalle |
+|---|---|
+| **Proyecto** | WREWS — Water Risk Early Warning System — Challenge #3 |
+| **Fecha de la reunión** | 13/11/2026 |
+| **Asistentes** | Mateo Ramírez Cabrera, Jorge Andrés Rodríguez Huertas. Antonio Benítez Rueda no asistió; sus tareas se acordaron por mensaje |
+| **Modalidad** | Presencial (Universidad de La Sabana) |
+| **Temas tratados** | 1. Despliegue del gateway en la Raspberry Pi con la microSD preparada y el kit de instalación. 2. Ejecución de las 11 pruebas de extremo a extremo y copia de la base de datos y del registro como evidencia. 3. Grabación del video por escenas y reparto de las partes A, B y C. 4. Reparto de las tareas pendientes de la Wiki y preparación del pitch de la sustentación. |
+| **Compromisos y cumplimiento** | Mateo: instalación del gateway, pruebas y edición del video — ✅ Cumplido. Jorge: microSD, pruebas y escena C del video — ✅ Cumplido. Antonio: clips de la persona B, revisión de la nube, los diagramas y el modelo de negocio, y pitch — en curso al cierre de la Wiki. |
+
+### Autoevaluación de la contribución individual (Challenge #3)
+
+| Integrante | Nivel autoevaluado | Justificación breve |
+|---|---|---|
+| Mateo Ramírez Cabrera | **Experto** | Integró el firmware v8, el gateway, el módulo de IA y el bot de Telegram, instaló el sistema en la Raspberry Pi y llevó las pruebas de extremo a extremo con el prototipo real. |
+| Jorge Andrés Rodríguez Huertas | **Experto** | Preparó la microSD para el arranque automático de la Pi, participó en el despliegue y en las 11 pruebas en la universidad, y grabó la escena del control desde la nube y de la IA. |
+| Antonio Benítez Rueda | **Avanzado** | Revisó el tablero de Ubidots, los diagramas y el modelo de negocio frente al enunciado, grabó su parte del video y preparó el pitch. Su firmware v7 fue la base del v8. |
 
 ---
 

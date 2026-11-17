@@ -1,2 +1,10 @@
 # Credenciales de la WLAN y del tablero (ver firmware/wrews/secrets.example.h)
 firmware/wrews/secrets.h
+
+# Gateway (Challenge 3): configuracion con claves y datos locales
+gateway/gateway.env
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+.pytest_cache/

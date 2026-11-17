@@ -120,6 +120,22 @@ El índice evaporativo pasó a ser la evaporación potencial de Priestley-Taylor
 
 El sol real saturaba el índice evaporativo en modo demo; la evaporación sola producía falsos positivos con el tubo lleno; el tablero no se recuperaba tras una caída de la WLAN; y el buzzer no reproducía el tono de crítico. Las cuatro se corrigieron gracias al banco de pruebas, lo que muestra el valor de validar sobre el equipo integrado y no solo sobre el modelo.
 
+### 11. (Challenge #3) El sistema funciona de punta a punta sin perder la autonomía local
+
+Los datos viajan del ESP32 al gateway y a la nube por MQTT, se guardan en SQLite antes de salir y vuelven en forma de órdenes (silenciar) y recomendaciones. La comunicación va en un hilo aparte: con el broker o Internet caídos, la alarma local siguió igual.
+
+### 12. (Challenge #3) El gateway aporta más que reenviar datos
+
+Filtró en tiempo real las lecturas imposibles del sensor, detectó el ESP32 apagado en 20 s y declaró el FALLO en su nombre, y conservó los datos durante los cortes de Internet.
+
+### 13. (Challenge #3) La IA es útil cuando se separan el cálculo y el lenguaje
+
+La predicción (regresión propia) da cifras verificables y gratuitas; el modelo de lenguaje solo las interpreta, a pedido. Así el costo es predecible (≈ USD 0,02 por consulta) y una alucinación no cambia los números que se reportan.
+
+### 14. (Challenge #3) Las restricciones del plan gratuito cambiaron el diseño
+
+El cupo de SMS de Ubidots se agotó en las pruebas, lo que llevó a un canal propio por Telegram, sin costo y con control de acceso.
+
 ---
 
 ## 7.2 Retos encontrados durante el desarrollo
@@ -187,6 +203,22 @@ Con el tubo lleno y un mediodía seco y soleado, el equipo pasaba a CRÍTICO sol
 
 El tono de crítico (2500 Hz) sonaba como clics. Un barrido de frecuencias mostró que el buzzer del prototipo no suena desde 2500 Hz, y que los clics venían de reconfigurar el PWM cada 10 ms. Se bajó el tono a 2000 Hz y el buzzer pasó a manejarse por ciclo útil, configurando la frecuencia solo cuando cambia el estado.
 
+### (Challenge #3) Lecturas corruptas del BME280
+
+Un contacto flojo en el bus I²C produjo lecturas de 180 °C y presiones negativas, que generaron una PRECAUCIÓN falsa por evaporación. Se resolvió revisando el cableado y agregando filtros de plausibilidad en el ESP32 y en el gateway (sección 5.8).
+
+### (Challenge #3) El gateway cambia de IP
+
+Con un hotspot, la IP del gateway puede cambiar al reconectarse. Se resolvió buscando el gateway por nombre (mDNS) desde el ESP32.
+
+### (Challenge #3) Cupo de notificaciones y costo de la IA
+
+Los reinicios durante las pruebas consumieron el cupo de SMS, y las recomendaciones automáticas, créditos de la API. Se pasó a Telegram y a consultar el modelo solo a pedido.
+
+### (Challenge #3) Un solo lector por bot de Telegram
+
+Telegram permite que un solo programa lea los mensajes de un bot. Mientras se probaba en un PC y luego en la Pi, había que tener apagado uno de los dos gateways.
+
 ---
 
 ## 7.3 Trabajo futuro
@@ -245,9 +277,21 @@ Servir el tablero por HTTPS, permitir cambiar las redes Wi-Fi sin reprogramar (p
 
 Medir el consumo por estado, estimar la autonomía con pilas y evaluar modos de bajo consumo compatibles con el tablero, por ejemplo despertar periódico con el radio apagado entre consultas.
 
-### 11. (Challenge #2) Detección de fallas del BME280 y del INA219
+### 11. (Challenge #3) No perder datos con el gateway apagado
 
-Validar el rango físico de cada lectura (por ejemplo, temperatura entre −20 y 60 °C, humedad entre 0 y 100 % y presión entre 600 y 1100 hPa), descartar las lecturas imposibles antes de que entren a la ventana de evaporación y pasar a FALLO cuando se repitan. En las pruebas, un BME280 desconectado o con lecturas corruptas entregó valores imposibles (T > 150 °C, presión de 678.8 hPa) que el equipo no detectó como falla (Sección 5.7.6).
+Sesión persistente del gateway en Mosquitto (`clean_session = false`) con `queue_qos0_messages`, para que el broker guarde los mensajes mientras el servicio está detenido.
+
+### 12. (Challenge #3) Cifrar también el tramo local
+
+MQTT con TLS (puerto 8883) entre el ESP32 y Mosquitto, con certificado propio, para no depender solo del cifrado WPA2 de la WLAN.
+
+### 13. (Challenge #3) Alerta por inactividad en la nube
+
+Un evento de Ubidots que avise si el gateway deja de enviar datos (Internet o gateway caídos), porque en ese caso el estado se queda en su último valor.
+
+### 14. (Challenge #3) Varios nodos y modelo predictivo con más historia
+
+Desplegar varios ESP32 por gateway y entrenar la predicción con días de datos (estacionalidad, consumo) en vez de una regresión de 10 minutos.
 
 ---
 
@@ -275,18 +319,7 @@ El proyecto permite demostrar de forma funcional el concepto de **alerta tempran
 
 ## 7.5 Referencias
 
-Formato IEEE. [1]–[4] se tomaron textualmente del enunciado oficial. [5]–[37] corresponden al modelo de evaporación, los pesos, los umbrales, los componentes, los estándares y la normativa del Challenge #2; en el firmware se citan con la numeración de las hojas de trabajo del equipo (`[Ev n]` y `[Pe n]`), con esta equivalencia:
-
-| Código | Wiki | Código | Wiki | Código | Wiki |
-|---|---|---|---|---|---|
-| Ev 1 | [5] | Ev 9 | [13] | Pe 7 | [20] |
-| Ev 2 = Pe 1 | [6] | Ev 10 | [14] | Pe 8 | [21] |
-| Ev 3 | [7] | Ev 12 = Pe 14 | [15] | Pe 9 | [22] |
-| Ev 4 | [8] | Pe 3 | [16] | Pe 10 | [23] |
-| Ev 5 = Pe 2 | [9] | Pe 4 | [17] | Pe 11 | [24] |
-| Ev 6 = Pe 15 | [10] | Pe 5 | [18] | Pe 12 · Pe 13 | [25] · [26] |
-| Ev 7 | [11] | Pe 6 | [19] | Pe 16 · Pe 17 | [27] · [28] |
-| Ev 8 | [12] | | | | |
+Formato IEEE. [1]–[4] se tomaron textualmente del enunciado oficial. [5]–[31] corresponden al modelo de evaporación, los pesos, los umbrales, los componentes y los estándares del Challenge #2; en el firmware se citan con la numeración de las hojas de trabajo del equipo (`[Ev n]` y `[Pe n]`), equivalente a esta lista.
 
 **Contexto del reto**
 
@@ -360,19 +393,27 @@ Formato IEEE. [1]–[4] se tomaron textualmente del enunciado oficial. [5]–[37
 
 [31] Espressif Systems, "ESP-IDF Programming Guide — FreeRTOS (IDF)." [En línea]. Disponible: https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/freertos_idf.html
 
-**Normativa**
+**Referencias del Challenge #3**
 
-[32] Ministerio de Minas y Energía, "Resolución 40117 de 2024, por la cual se modifica el Reglamento Técnico de Instalaciones Eléctricas — RETIE," Colombia, abr. 2024; modificada por las Resoluciones 40304 de 2025 y 40284 de 2026.
+[32] N. O'Leary, "PubSubClient: A client library for the Arduino Ethernet Shield that provides support for MQTT," GitHub. [En línea]. Disponible: https://github.com/knolleary/pubsubclient
 
-[33] Ministerio de Vivienda, Ciudad y Territorio, "Resolución 0330 de 2017, por la cual se adopta el Reglamento Técnico para el Sector de Agua Potable y Saneamiento Básico — RAS," Colombia, 2017.
+[33] Eclipse Foundation, "Eclipse Paho MQTT Python client," v2.x. [En línea]. Disponible: https://eclipse.dev/paho/
 
-[34] *Degrees of Protection Provided by Enclosures (IP Code)*, IEC 60529, International Electrotechnical Commission.
+[34] SQLite Consortium, "SQLite documentation: Write-Ahead Logging." [En línea]. Disponible: https://www.sqlite.org/wal.html
 
-[35] Congreso de la República de Colombia, "Ley 1523 de 2012, por la cual se adopta la política nacional de gestión del riesgo de desastres," abr. 2012.
+[35] Ubidots, "MQTT API Reference." [En línea]. Disponible: https://docs.ubidots.com/reference/mqtt
 
-[36] Congreso de la República de Colombia, "Ley Estatutaria 1581 de 2012, por la cual se dictan disposiciones generales para la protección de datos personales," oct. 2012.
+[36] Anthropic, "Claude API documentation: Messages." [En línea]. Disponible: https://docs.claude.com
 
-[37] Agencia Nacional del Espectro (ANE), "Resolución 105 de 2020, por medio de la cual se planea y atribuye el espectro radioeléctrico en Colombia," Título 4 y Anexo 1 (bandas de libre utilización, incluida la de 2.4 GHz), Colombia, 2020.
+[37] Telegram, "Telegram Bot API." [En línea]. Disponible: https://core.telegram.org/bots/api
+
+[38] J. D. Hunter, "Matplotlib: A 2D graphics environment," *Computing in Science & Engineering*, vol. 9, no. 3, pp. 90–95, 2007.
+
+[39] OASIS, "MQTT Version 3.1.1," OASIS Standard, 2014 (ISO/IEC 20922:2016). [En línea]. Disponible: https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/mqtt-v3.1.1.html
+
+[40] Eclipse Foundation, "Eclipse Mosquitto: an open source MQTT broker — mosquitto.conf." [En línea]. Disponible: https://mosquitto.org/man/mosquitto-conf-5.html
+
+[41] Congreso de la República de Colombia, "Ley Estatutaria 1581 de 2012, por la cual se dictan disposiciones generales para la protección de datos personales," oct. 2012.
 
 ---
 

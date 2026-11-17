@@ -281,36 +281,17 @@ Una implementación en un reservorio real requeriría posteriormente calibració
 
 El banco de pruebas del Challenge #2 se organizó según los bloques mínimos del enunciado. Las pruebas se hicieron sobre el equipo integrado (carcasa, tubo de PVC, alimentación por pilas) con el firmware v7, al sol, y con el tablero abierto desde celulares y PC conectados al hotspot que hace de WLAN de la zona.
 
-### Criterios de aceptación
-
-Fijados en la hoja de trabajo del equipo antes de las pruebas:
-
-| Prueba | Criterio de aceptación | Resultado |
-|---|---|---|
-| Nivel contra referencia | Error ≤ ±1 cm tras calibración | No se midió el error; se capturaron las distancias de lleno y vacío (Sección 5.7.1) |
-| Temperatura y humedad contra referencia | T ≤ ±1 °C; HR ≤ ±5 % | ✅ ΔT ≈ 0.8 °C; ΔHR ≈ 4.7 pp |
-| Fusión y umbrales | ≥ 12 escenarios × 3 repeticiones; 0 falsos negativos en escenarios críticos; ≤ 1 falso positivo; sin oscilación al bajar de estado | ⚠️ 8 escenarios; 1 falso negativo (F6) y 1 falso positivo parcial (F3) |
-| Latencia | Alarma física ≤ 2 s y tablero ≤ 5 s tras el evento (desde que se cumple la condición; la escalera de estados agrega la confirmación) | ✅ Tablero ≈ 4 s; la alarma física no se cronometró por separado |
-| Acceso restringido | Un dispositivo no autorizado no accede a los datos | ✅ Desde fuera de la WLAN no se accede; 5 claves incorrectas bloquean el inicio de sesión 30 s |
-| Caída de la WLAN | La alerta in situ continúa; reconexión automática < 60 s | ✅ La alerta in situ continúa y el tablero se recupera solo; el tiempo de reconexión no se cronometró |
-| Repetibilidad | Desviación estándar del nivel ≤ 0.5 cm; *jitter* del periodo de muestreo < 5 % con el tablero en uso | No realizado |
-| Consumo | Consumo medio reportado; autonomía objetivo ≥ 24 h | No realizado |
-| Larga duración | 12–24 h encendido sin reinicios | No realizado |
-
-> Sobre el criterio de acceso: en la implementación final, un dispositivo fuera de la subred de la WLAN recibe **403**, y uno dentro de la WLAN pero sin sesión es enviado al inicio de sesión (**401** en la API). La lista blanca de IP planeada se reemplazó por la sesión con usuario y contraseña (ver [Sección 12.4](12-Mejoras-Challenge-1.md)).
-
 ### 5.7.1 Calibración contra referencia (*ground truth*)
 
 | Sensor | Referencia | Procedimiento | Resultado |
 |---|---|---|---|
-| Nivel (HC-SR04 en el tubo) | Regla graduada junto al tubo | Distancias de lleno y vacío capturadas desde el tablero ("Usar como lleno/vacío"); luego 5 o más alturas de agua comparadas con el nivel del tablero | Vacío ≈ 40 cm (40.3 cm en el tablero); lleno = 19.2 cm simulando el agua con una botella dentro del tubo (depende de lo que se use para simularlo). En la demostración del video, "lleno" se recapturó en 4.9 cm |
+| Nivel (HC-SR04 en el tubo) | Regla graduada junto al tubo | Distancias de lleno y vacío capturadas desde el tablero ("Usar como lleno/vacío"); luego 5 o más alturas de agua comparadas con el nivel del tablero | Lleno ≈ 40 cm, vacío = 19.2 (usando la botella por dentro, pero depende de lo que usemos para simularlo) cm |
 | Panel + INA219 | No usamos ninguna referencia, solo verificamos prendiéndolo en diferentes momentos del día comparando las sensaciones con los valores que arrojaba | Con sol, irradiancia de referencia en el tablero y "Calcular K" | K = 10 (W/m²)/mA (etiqueta: 10) |
 | Cero del panel (INA219) | Panel a oscuras | Promedio de 20 lecturas al arrancar | −0.105 y −0.115 mA (≈ 1 W/m²), restado de todas las lecturas |
-| BME280 (T, HR) | Termohigrómetro digital (±1 °C, ±5 % HR según su ficha) | Sonda junto a las rejillas del BME280, 5 a 10 min de estabilización y una lectura por minuto durante 5 min | ΔT ≈ 0.8 °C; ΔHR ≈ 4.7 pp (BME280: 20.0 °C y 57.2–57.6 %; termohigrómetro: 20.8 °C y 62 %). Estas diferencias son consistentes porque están dentro del rango de incertidumbre de la ficha del higrómetro |
-| BME280 (presión) | Presión media del campus de la Universidad de La Sabana publicada por la universidad: 751.9 hPa | Comparación de la lectura del tablero con el valor publicado | BME280: 751.7 hPa; diferencia de −0.2 hPa. Es una comparación contra un promedio, no contra una medición simultánea, así que solo confirma el orden de magnitud |
+| BME280 (T, HR) | Termohigrómetro digital (±1 °C, ±5 % HR según su ficha) | Sonda junto a las rejillas del BME280, 5 a 10 min de estabilización y una lectura por minuto durante 5 min | ΔT ≈ 0.8 °C; ΔHR ≈ 4.7 pp. Estas diferencias son consistenes porque están dentro del rango de incertidumbre de la ficha del higrómetro |
 | Buzzer (actuador) | Barrido de frecuencias, de 500 a 4000 Hz | Tono de 0.6 s por frecuencia, anotando cuáles suenan | Suena hasta **2000 Hz**; no suena desde 2500 Hz. El tono de crítico se ajustó de 2500 a 2000 Hz |
 
-> El termohigrómetro tiene una exactitud similar a la del BME280 (±1 °C, igual en ambos, y ±5 % contra ±3 % HR según su datasheet [15]), así que la comparación es una **verificación de consistencia** contra un instrumento independiente, no una calibración formal. Sin embargo, nos ayuda a verificar que el módulo que usamos no presenta errores de medición.
+> El termohigrómetro tiene una exactitud similar la del BME280 (±1 °C, igual en ambos, y ±5 % contra ±3 % HR según su datasheet [15]), así que la comparación es una **verificación de consistencia** contra un instrumento independiente, no una calibración formal. Sin embargo, nos ayuda a verificar que el módulo que usamos no presenta errores de medición.
 
 ### 5.7.2 Verificación del modelo de evaporación
 
@@ -326,8 +307,6 @@ En cada arranque, el firmware ejecuta pruebas de Priestley-Taylor contra valores
 | Modo campo: ventana de 120 s y de 24 h con la misma luz | Mismo Rs equivalente (43.2 MJ/m²) | 43.20 y 43.20 | ✅ |
 | Modo demo: luz de mediodía despejado (G_pico = 1048.8 W/m²) y luz constante de 500 W/m² | Rs = Rso = 28.84 MJ/m²; con 500 W/m², Rs = 500/G_pico · Rso = 13.75 MJ/m² (± 0.1) | 28.84 y 13.75 MJ/m² (*) | ✅ (*) |
 
-(*) Esta prueba se agregó en el firmware v7 y su salida no quedó registrada del monitor serial del ESP32. El valor reportado se obtuvo ejecutando en un PC la misma lógica del firmware (llenado de los 24 *buckets* con 120 muestras de 1 s y cálculo del modo demo) en precisión `float` de 32 bits, como la del ESP32: 28.8432 y 13.7510 MJ/m², frente a 28.8432 y 13.7510 esperados. Al arrancar, el equipo ejecuta esta misma prueba e imprime el resultado en el monitor serial.
-
 Además se verificaron a mano lecturas reales del tablero (21.2 °C, HR 42.6 %, 75.1 kPa, sin luz): Δ/(Δ+γ) = 0.756 en el equipo frente a 0.754 calculado; ea = 1.08 kPa en ambos; índice evaporativo = 21.5 frente a 21.6; riesgo = 19.8 en ambos. Las diferencias son de redondeo.
 
 ### 5.7.3 Emulación acelerada de condiciones reales
@@ -336,7 +315,7 @@ Además se verificaron a mano lecturas reales del tablero (21.2 °C, HR 42.6 %, 
 |---|---|---|
 | Descenso del nivel | Vaciado del tubo | Escalera NORMAL → PRECAUCIÓN → CRÍTICO en el LCD, los LEDs, el buzzer y el tablero, y vuelta a NORMAL al llenarlo |
 | Sol fuerte y aire seco | Equipo al sol (irradiancia medida de 831 W/m², 27.5 °C, 24.8 % HR, VPD 2.76 kPa) | Con el modo demo inicial el índice se saturaba en 100 (ver abajo); tras la corrección queda en ≈ 90 (Priestley-Taylor 60 + VPD 30) |
-| Calor sin luz | Secador sobre el BME280, panel a la sombra (44.7 °C, 16.1 % HR, VPD 6.65 kPa) | El índice se queda en 30: sin radiación, Priestley-Taylor da ET = 0 y solo aporta el componente de VPD, que ya está en su tope. Comportamiento esperado del método. Se hizo una prueba también, llegando a unos 70 °C y llegándole un poquito de luz; el índice evaporativo subió a crítico y el del sistema solo hasta Precaución: tal y como queríamos |
+| Calor sin luz | Secador sobre el BME280, panel a la sombra (44.7 °C, 16.1 % HR, VPD 6.65 kPa) | El índice se queda en 30: sin radiación, Priestley-Taylor da ET = 0 y solo aporta el componente de VPD, que ya está en su tope. Comportamiento esperado del método. Se hizo una prueba también, llegando a unos 70°C y llegándole un poquito de luz; el índice evaporativo subió a crítico y el del sistema solo hasta Precaución: tal y como queríamos |
 | Sombra o nube | Tapar el panel | El índice baja a medida que la ventana se llena con la luz nueva (hasta 120 s en modo demo) |
 
 **Corrección encontrada en esta prueba.** En el modo demo inicial, la ventana de 120 s se extrapolaba a un día de 24 h con la misma luz. Con sol real, 831 W/m² equivalían a 72 MJ/m² "por día", 2.5 veces el máximo físico del sitio (28.8 MJ/m²), y la parte de Priestley-Taylor se saturaba siempre. Se cambió el modo demo para tratar la luz de la ventana como el mediodía de un día con esa nubosidad (índice de claridad, Sección 3.2.3). Con la regla nueva, un cielo parcialmente nublado (400 W/m², 21 °C, 50 % HR) pasa de un índice de ≈ 89 a ≈ 52, y el índice vuelve a distinguir días soleados de nublados.
@@ -352,13 +331,9 @@ Además se verificaron a mano lecturas reales del tablero (21.2 °C, HR 42.6 %, 
 | F5 | Nivel ≤ 15 % | CRÍTICO | CRÍTICO |
 | F6 | Descenso rápido sostenido (≥ 68 pp/min) | CRÍTICO por tasa | No lo pudimos medir porque manualmente causa discontinuidad |
 | F7 | Reposicionamiento brusco (> 8 pp en 1 s) | Sin alarma por tasa (discontinuidad) | Sin alarma |
-| F8 | Sensor de nivel desconectado | FALLO | FALLO ("SIN ECO") |
-| F9 | Nivel justo en 50 % (borde de precaución) | PRECAUCIÓN (la regla es ≤ 50 %) | No realizado |
-| F10 | Nivel justo en 15 % (borde de crítico) | CRÍTICO (la regla es ≤ 15 %) | No realizado |
-| F11 | Recuperación: llenar el tubo desde CRÍTICO | CRÍTICO → PRECAUCIÓN → NORMAL, sin oscilar (3 ciclos de confirmación para bajar) | No realizado como prueba formal |
-| F12 | Alarma silenciada desde el tablero y el estado empeora | El silencio se cancela y el buzzer vuelve a sonar | No realizado |
+| F8 | Sensor de nivel desconectado | FALLO | FALLO ("SIN ECHO") |
 
-Falsos positivos observados: 1, técnicamente medio (F3: subió a CRÍTICO por el movimiento de la mano al sostener el tubo). Falsos negativos observados: 1 (F6: el descenso rápido hecho a mano se detecta como discontinuidad, así que la tasa no llega a CRÍTICO).
+Falsos positivos observados: 1 (técnicamente medio). Falsos negativos observados: 1.
 
 > El caso F2 motivó una regla nueva: antes del cambio, el equipo quedaba en CRÍTICO al sol con el tubo lleno (nivel 94 %, riesgo 33). Era un falso positivo, y desde entonces la evaporación sola llega como máximo a PRECAUCIÓN (Sección 3.2.6).
 
@@ -366,7 +341,7 @@ Falsos positivos observados: 1, técnicamente medio (F3: subió a CRÍTICO por e
 
 | Prueba | Criterio | Resultado |
 |---|---|---|
-| Latencia de la alerta | Tiempo entre el cambio físico y el aviso en el tablero. Esperado ≤ ~5 s: confirmación del estado (2 ciclos de 1 s) + consulta del tablero (cada 2 s) | ~4 s |
+| Latencia de la alerta | Tiempo entre el cambio físico y el aviso en el tablero. Esperado ≤ ~5 s: confirmación del estado (2 ciclos de 1 s) + consulta del tablero (cada 2 s) | ~4s |
 | Actualización del valor actual | El tablero muestra "dato de hace X s" | Valores observados de 0.1 a 0.4 s |
 | Actualización del histórico | Las gráficas se actualizan cada 5 s con un punto cada 2 s | ✅ observado |
 | Avisos | Cada cambio de estado muestra un aviso, suena y vibra | ✅ observado |
@@ -381,10 +356,63 @@ Falsos positivos observados: 1, técnicamente medio (F3: subió a CRÍTICO por e
 | Recarga y apertura desde otro dispositivo tras la caída | Recargar, abrir desde un segundo celular o PC | ✅ tras la corrección |
 | Acceso con clave incorrecta | 5 intentos | Bloqueo de 30 s |
 | Acceso desde fuera de la WLAN | Celular con datos móviles | No se puede acceder al tablero |
-| Valores fuera de rango | Distancia mayor que "vacío" o menor que "lleno" | El nivel se limita a 0 % o 100 % |
-| Sensor de nivel o BME280 ausente | Desconectar | Sin eco del sensor de nivel el equipo pasa a FALLO ("SIN ECO"). Con el BME280 desconectado o con lecturas corruptas, en cambio, las lecturas arrojadas son muy incorrectas (Ej. T° > 150 °C) y el equipo **no** pasa a FALLO. En el video (min 2:40) se ve un caso: presión de 678.8 hPa (la real es ≈ 751 hPa) y un VPD promedio de la ventana de 213.20 kPa, físicamente imposible, que llevó el índice evaporativo a 88.2. Falta validar el rango físico de las lecturas del BME280 y del INA219 (Secciones 6.3 y 7.3) |
+| Valores fuera de rango | Distancia mayor que "vacío" o menor que "lleno" | El nivel se limita a 0 % o 100 % (`constrain` en `distanciaANivel`) |
+| Sensor de nivel o BME280 ausente | Desconectar | Lecturas arrojadas muy incorrectas (Ej. T° > 150 °C) |
 | Calibración inválida | Guardar "vacío" menor que "lleno" + 2 cm | El equipo la rechaza con el motivo en rojo y no cambia nada |
 | Persistencia de la calibración | Apagar y encender | Queda guardado siempre |
+
+---
+
+## 5.8 Validación del Challenge #3
+
+### Configuración experimental
+
+| Etapa | Gateway | Red | Fecha |
+|---|---|---|---|
+| **1. Simulación** | Gateway real + Mosquitto con ACL + un segundo Mosquitto haciendo de Ubidots + simulador del ESP32 (`gateway/simulador_esp32.py`) | Local (un computador) | 12/11/2026 |
+| **2. Prototipo real, gateway en un PC** | Un computador portátil hace de Raspberry Pi (mismo software: Mosquitto con usuarios y ACL, gateway, SQLite) | Wi-Fi de la casa | 12/11/2026 |
+| **3. Prototipo real, gateway en la Raspberry Pi** | Raspberry Pi 5 prestada por la universidad, con Raspberry Pi OS Lite de 64 bits (Debian 13) en la microSD del equipo, instalada con `instalar.sh` | Hotspot de un iPhone (2.4 GHz, WPA2) | 13/11/2026, de 9:44 a 13:41 |
+
+Además, el gateway tiene **22 pruebas automáticas** (`pytest`) que cubren la validación, las ventanas, la regresión, el respaldo de la IA, la cola hacia la nube, el filtro del switch de Ubidots y el control de acceso del bot. Todas pasan. El firmware v8 compila sin advertencias con el core esp32 3.3.12 (90 % de la flash, 24 % de la RAM).
+
+> Los resultados de la etapa 3 salen de la base de datos SQLite y del registro (`journalctl`) que se copiaron de la Pi al terminar las pruebas: 1477 mediciones, 114 cambios de estado, 228 eventos, 2 comandos, 63 recomendaciones de la IA y 423 envíos a Ubidots. Las horas son las de la Pi.
+
+### Resultados de las pruebas de extremo a extremo
+
+| # | Prueba | Criterio de aceptación | Resultado (etapa 2, 12/11/2026) | Resultado en la Pi (etapa 3) |
+|---|---|---|---|---|
+| 1 | Datos llegan a SQLite | Una medición cada 5 s | ✅ Cada 5 s; ~720 por hora | ✅ Mediana de **12 mediciones por minuto** (una cada 5 s). 1477 mediciones de 9:47 a 13:41; los huecos corresponden a las pruebas de desconexión. 38 muestras se marcaron como anomalía: saltos de nivel al mover el cartón a mano, aceptados al repetirse |
+| 2 | Se guarda antes de reenviar | Todo lo que llega a Ubidots está antes en `cola_nube` | ✅ Cola en 0 con Internet; 155 envíos sin pendientes | ✅ 423 mensajes pasaron por `cola_nube`; al final, **0 pendientes** |
+| 3 | Escalada PRECAUCIÓN → CRÍTICO | Alarma local, tableros y aviso al celular | ✅ Alarma local, tablero local, Ubidots, aviso por Telegram | ✅ Por ejemplo, 12:47:19 PRECAUCIÓN y 12:47:21 CRÍTICO: LEDs y buzzer, tablero local, Ubidots y aviso por Telegram a los suscriptores aprobados (ver prueba 10) |
+| 4 | Silenciar desde Ubidots | El buzzer calla; el switch vuelve a 0 | ✅ 13:36:10: orden de Ubidots → respuesta del ESP32 `ok: 1` en **60 ms** desde el gateway; switch de vuelta en 0 en el mismo segundo | ✅ 11:36:16 y 11:46:10, en CRÍTICO: `ok: 1` en **56 ms** y **15 ms**; el buzzer calló y los LEDs siguieron |
+| 5 | Silenciar desde la Pi | Respuesta del ESP32 | No se ejecutó | ⏳ No se alcanzó a ejecutar; queda para la sustentación (`python -m wrews_gw.comando silenciar`). La misma orden sí se probó desde Ubidots (prueba 4) |
+| 6 | Recomendación de la IA | Respuesta en el tablero local, en Ubidots y en SQLite | ✅ Claude respondió en 2 a 10 s (típico 8 s); se guardó con su prompt | ✅ 7 consultas a Claude (`claude-opus-5-5`) con `/recomendacion`: de **6,9 a 11,5 s**, cada una guardada con su prompt. Otras 56 recomendaciones salieron de la tabla de reglas: las automáticas y las de los cortes de Internet |
+| 7 | Caída de Internet | La alarma local sigue; los datos se envían al volver con su hora | ✅ parcial: corte corto; el aviso de Telegram retenido salió al volver (15:08:56 → 15:09:11) y Ubidots se reconectó en 3 s con la cola en 0. En simulación: cola de 5 mensajes vaciada al volver | ✅ Dos cortes. **12:18–12:26 (8 min):** se cayó la red del hotspot; la Pi guardó 10 mensajes en `cola_nube` y los subió en 5 s al volver (12:26:12–12:26:17), con su hora original. **13:26–13:28:** sin Internet en la Pi; Telegram reintentó cada 15 s, los avisos salieron al volver (13:28:05) y la cola quedó en 0. La alarma local no se afectó |
+| 8 | ESP32 apagado | FALLO en ≤ 25 s | ✅ Detectado a los **20 s** (14:29:28); FALLO con `origen: gateway` en Ubidots; volvió a NORMAL al reconectar | ✅ Cuatro desconexiones (13:19, 13:23, 13:26 y 13:28): detectadas a los **20,5 a 21,0 s** de la última medición, con aviso por Telegram. Al reconectar, el estado volvió al real |
+| 9 | Broker caído 1 min | La alarma local sigue; reconexión automática | ✅ 14:10:46–14:11:47: alarma local sin cambios; ESP32 y gateway reconectados solos en ~30 s (después se bajó el reintento del gateway a ≤ 5 s) | ✅ 13:37: con el broker detenido, el prototipo siguió alarmando; el gateway registró la última voluntad del ESP32 (`LWT`) a los 3 s. Al arrancar el broker, todo se reconectó solo (comprobado a las 13:39:30) |
+| 10 | Latencia ESP32 → Ubidots | Estado: pocos segundos; variables: ≤ 60 s | Estado: se envía al instante (la cola se revisa cada 1 s) | ✅ Medido con las marcas de tiempo de la Pi: del gateway a Ubidots, **mediana 0,8 s** y 90 % en menos de 1,5 s (405 envíos, contando hasta la confirmación de Ubidots). Del cambio de estado al aviso de Telegram, **unos 2 s**. Las variables medidas se promedian en ventanas de 60 s, a propósito |
+| 11 | Acceso restringido | Sin clave no hay acceso al broker, a Ubidots ni al bot | ✅ Broker: anónimo y clave errada rechazados (*not authorised*); el usuario `esp32` no puede publicar comandos. Bot: sin clave no hay solicitud; sin aprobación no hay alertas ni comandos | ✅ 13:36:12: publicar en el broker de la Pi sin usuario → `not authorised`. Bot: un usuario nuevo pidió acceso con la clave y quedó pendiente hasta que el administrador lo aprobó (13:21:28 → 13:21:35). Tablero de Ubidots abierto sin sesión (16/11, 21:51): redirige a la página de inicio de sesión |
+
+### Incidentes encontrados en las pruebas y cómo se resolvieron
+
+**1. Lecturas imposibles del BME280.** Durante la etapa 2, la temperatura saltó de 22 °C a **179,7 °C** y la presión llegó a valores negativos (−153 hPa). El gateway marcó como anomalía las 59 muestras afectadas y no las subió a Ubidots. Sin embargo, en el ESP32 esas lecturas entraron a la ventana de evaporación y produjeron una **PRECAUCIÓN falsa**: con T_max = 180 °C, el déficit de vapor de la ventana llegó a 45 kPa y el modelo calculó radiación neta positiva sin luz. Diagnóstico: un contacto intermitente en el bus I²C (SDA/SCL), que corrompe bytes que la compensación de Bosch convierte en valores absurdos. Después de reasentar el cableado, 2 de 319 lecturas siguieron siendo malas. Acciones:
+- se agregó al firmware el **filtro de plausibilidad** (sección 3.21);
+- el gateway pasó a descartar **solo la variable** fuera de rango y no la muestra completa, para no perder el nivel.
+
+**2. Cupo de SMS agotado.** Los eventos de Ubidots con SMS funcionaron, pero cada reinicio del ESP32 en las pruebas generó un FALLO y un "normal otra vez", y el plan gratuito pidió saldo. Las alertas al celular se pasaron a **Telegram** desde el gateway.
+
+**3. Cambio de IP del gateway.** Al reconectar la Wi-Fi, el computador que hacía de gateway cambió de IP y el ESP32 dejó de conectarse. Se cambió el firmware para buscar el gateway **por nombre** (mDNS), y después del cambio el ESP32 lo encontró solo.
+
+### Costo de la IA medido
+
+| Medida | Valor (12/11/2026) |
+|---|---|
+| Consultas a Claude | 31 (con la configuración automática del inicio de las pruebas) |
+| Tokens de entrada / salida | 21 978 / 23 690 (≈ 700 / 750 por consulta) |
+| Costo total aproximado | **USD 0,56** (≈ USD 0,02 por consulta) |
+| Latencia | 2 a 10 s, típico 8 s |
+
+A partir de esta medición, el modelo pasó a consultarse **solo a pedido**: en operación normal el costo es cero.
 
 ---
 

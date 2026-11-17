@@ -77,6 +77,27 @@ El equipo compiló y probó cada versión en el hardware y reportó los problema
 
 Claude también se usó para preparar las hojas de referencias del modelo de evaporación y de pesos y umbrales, y para actualizar esta Wiki.
 
+### Desarrollo del sistema del Challenge #3
+
+En el Challenge #3 se usó primero **Claude** (chat en claude.ai) para generar, a partir del enunciado y del contexto del proyecto, un borrador del firmware v8, del gateway y de la guía de despliegue. Ese borrador no se había compilado ni probado. Después se usó **Claude Code** (Anthropic) en el computador del equipo para revisarlo de forma crítica, implementar la versión final y probarla: el hilo MQTT del ESP32 (`wrews.ino`), el gateway de la Raspberry Pi (`gateway/`: SQLite, procesamiento local, puente con Ubidots, módulo de IA y bot de Telegram), sus 22 pruebas automáticas y las guías de despliegue y del video. Las decisiones de diseño las tomó el equipo: usar Claude como proveedor de la IA del sistema, consultarla solo a pedido para no gastar créditos, pasar las alertas de SMS a Telegram y restringir el bot con clave y aprobación del administrador.
+
+El equipo montó el prototipo, ejecutó las pruebas con el hardware real, configuró Ubidots y el bot, y reportó lo que encontró. Algunas fallas solo aparecieron con el equipo real y se corrigieron a partir de esa evidencia. Por ejemplo, la temperatura saltaba a 180 °C por un contacto flojo del BME280 y generaba una precaución falsa; el gateway dejó de encontrarse cuando el computador cambió de IP; y el cupo de SMS de Ubidots se agotó con los reinicios de las pruebas. La revisión del borrador inicial también encontró errores antes de usarlo, como un servicio que se detenía si se reiniciaba el broker y una orden vieja de Ubidots que podía silenciar la alarma por error.
+
+En este challenge la IA se usó para **aterrizar las ideas del equipo**: el equipo definía qué quería que hiciera el sistema y Claude ayudaba a concretar cómo implementarlo. **Claude no tomó decisiones**: cada propuesta la revisó el equipo, que eligió entre las opciones, la aceptó, la ajustó o la descartó. Claude también se usó para redactar el borrador de las secciones del Challenge #3 de esta Wiki, que el equipo revisó y completó con sus resultados. En resumen, a Claude Code se le pidió:
+
+- revisar de forma crítica el borrador inicial y señalar sus errores antes de usarlo;
+- implementar y compilar el firmware v8 y el gateway, y escribir sus pruebas automáticas;
+- explicar Ubidots, Mosquitto y la Raspberry Pi, y guiar paso a paso la configuración del tablero, de los eventos de notificación y del bot de Telegram;
+- preparar el kit de instalación de la Pi, la guía para grabar la microSD y el guion del video;
+- acompañar el despliegue en la universidad, por ejemplo para encontrar la Pi en el hotspot cuando no aparecía;
+- extraer de la base de datos y del registro de la Pi los resultados de las pruebas para esta Wiki, y buscar los precios de referencia del modelo de negocio.
+
+Todas las decisiones (la arquitectura, el uso de Claude como IA del sistema, consultarla solo a pedido, Telegram en vez de SMS, el acceso con clave y aprobación, los umbrales y el reparto de roles), el montaje, las pruebas con el hardware y la revisión final del texto las hizo el equipo.
+
+### La IA como parte del sistema (Challenge #3)
+
+Además de usarse para desarrollar, en el Challenge #3 la IA es un **componente de WREWS**. El módulo de recomendación usa la API de **Claude** (`claude-opus-5-5`). La predicción (minutos hasta el 15 %) la calcula el gateway con una regresión propia; el modelo de lenguaje solo convierte esos números en una recomendación para las autoridades, sin calcular cifras por su cuenta, y se consulta únicamente cuando alguien la pide. Cada respuesta queda guardada en SQLite con el prompt exacto que se le envió, y si no hay Internet responde una tabla de reglas (ver [Sección 3.25](03-Desarrollo-Modular.md)).
+
 ### Fórmulas y modelo de procesamiento
 
 Claude fue utilizado como apoyo para investigar, revisar y comprender diferentes fórmulas y modelos relacionados con las variables del proyecto.
@@ -207,6 +228,10 @@ Esto fue especialmente importante en temas como:
 - análisis de tendencia;
 - características eléctricas de los componentes.
 
+### Pruebas del Challenge #3
+
+En el Challenge #3, el firmware se compiló antes de cargarlo y el gateway se validó en tres pasos: pruebas automáticas, pruebas de extremo a extremo con un simulador del ESP32 y pruebas con el prototipo real, la cuenta real de Ubidots y la API real de Claude (ver [Sección 5.8](05-Configuracion-Experimental-Resultados.md)). Datos como el certificado TLS de Ubidots o los modelos disponibles en las APIs de IA se comprobaron contra la documentación oficial y no se tomaron como ciertos solo porque la IA los dijo.
+
 ## 8.4 Criterio de uso de Inteligencia Artificial
 
 La Inteligencia Artificial se utilizó como una herramienta de apoyo durante el proyecto y no como un reemplazo del trabajo realizado por el equipo.
@@ -227,15 +252,11 @@ De esta manera, la IA funcionó principalmente como una herramienta adicional de
 
 ## 8.5 Porcentaje de la Wiki redactado con IA
 
-Aproximadamente el **75 %** del texto de la Wiki se redactó con ayuda de IA y el **25 %** lo redactó directamente el equipo. El 75 % incluye texto que el equipo revisó y editó.
+Aproximadamente el **80 %** del texto de la Wiki se redactó con ayuda de IA y el **20 %** lo redactó directamente el equipo. El 80 % incluye texto que el equipo revisó y editó.
 
-La estimación se hizo por número de palabras (≈ 34 000 en total):
+La estimación se hizo por número de palabras. Cerca de la mitad del texto actual corresponde a la actualización del Challenge #2, redactada con Claude Code a partir del código, los resultados y las decisiones del equipo. La otra mitad viene del Challenge #1 y de la Sección 11, que también se estructuraron y redactaron con apoyo de Claude y luego fueron editadas por el equipo.
 
-| Parte de la Wiki | Palabras (aprox.) | Redacción |
-|---|---|---|
-| Actualización del Challenge #2 redactada con Claude Code a partir del código, los resultados y las decisiones del equipo | ≈ 15 100 (44 %) | IA, revisada por el equipo |
-| Texto escrito directamente por el equipo en el Challenge #2: la mayor parte de esta Sección 8, los resultados de las pruebas (5.7), la autoevaluación (6), los roles, el acta y la autoevaluación individual (9.7) y las correcciones a las demás secciones | ≈ 2 200 (7 %) | Equipo |
-| Texto del Challenge #1 y de la Sección 11, estructurado y redactado con apoyo de Claude y luego editado por el equipo | ≈ 16 800 (49 %) | ≈ 60 % IA / 40 % equipo (estimación del equipo) |
+En el Challenge #3, el borrador de las secciones marcadas "(Challenge #3)" se redactó con Claude Code a partir del código, los registros de las pruebas y las decisiones del equipo, y luego fue revisado y completado por el equipo. Con esas secciones (unas 8.300 palabras nuevas), la estimación por número de palabras queda en **cerca del 83 %** del texto redactado con ayuda de IA y el **17 %** directamente por el equipo.
 
 Todo el contenido fue revisado por el equipo. Los datos medidos (calibraciones, pruebas, fotos y resultados) provienen del trabajo del equipo.
 
