@@ -864,7 +864,7 @@ Todo queda en el monitor serial como evidencia.
 
 ### Carcasa
 
-Diseñada en CadQuery e impresa en PETG, en seis piezas: prueba de ajuste del tubo, acople al tubo, tapa, caja, piso intermedio y techo del BME280. La caja mide 136 × 110 × 73 mm (interior 130 × 104 × 70 mm). El BME280 va bajo un techo con rejillas, a la sombra y ventilado, como pide la buena práctica meteorológica para medir temperatura y humedad del aire. ⟨completar: versión final impresa, fotos y enlace a los STL⟩.
+Diseñada en CadQuery e impresa en PETG, en seis piezas: prueba de ajuste del tubo, acople al tubo, tapa, caja, piso intermedio y techo del BME280. La caja mide 136 × 110 × 73 mm (interior 130 × 104 × 70 mm). El BME280 va bajo un techo con rejillas, a la sombra y ventilado, como pide la buena práctica meteorológica para medir temperatura y humedad del aire. Los STL de las seis piezas, el script CadQuery y las vistas previas de la versión publicada (v16) están en [`/Carcasa_3D_/Carcasa_3D_v16`](https://github.com/jorgis857/sistema-alerta-temprana-riesgo-hidrico/tree/main/Carcasa_3D_/Carcasa_3D_v16).
 
 ### Sensor de nivel en tubo
 
@@ -878,7 +878,7 @@ El HC-SR04 va dentro de un tubo de **PVC sanitario de 3"** (diámetro exterior �
 | 5 V | `VIN` | HC-SR04, buzzer, LEDs, LCD |
 | 3.3 V | Pin `3V3` del ESP32 | BME280, INA219 |
 
-⟨completar: tipo de pilas usado finalmente y, si son alcalinas (≈ 6 a 6.4 V nuevas), los 2 diodos 1N4007 en serie y la tensión medida en la fila de 5 V⟩. Para programar por USB, el interruptor va en OFF.
+Usamos un portapilas con 4 pilas AA alcalinas Duracell de 1.5 V, junto con 2 diodos 1N4007 en serie para alimentar el prototipo sin necesidad de un cable de alimentación. Usamos los diodos para limitar el voltaje y que no fueran 6 V. Para programar por USB, el interruptor va en OFF.
 
 ### Mapa de pines (ESP32 DevKit de 38 pines)
 
@@ -886,7 +886,7 @@ El HC-SR04 va dentro de un tubo de **PVC sanitario de 3"** (diámetro exterior �
 |---|---|---|
 | `GPIO 21 (SDA)` · `GPIO 22 (SCL)` | BME280, INA219, LCD | Bus I²C |
 | `GPIO 5` | TRIG del HC-SR04 | Disparo del pulso ultrasónico |
-| `GPIO 18` | ECHO del HC-SR04 | Recepción del eco ⟨confirmar si lleva divisor resistivo⟩ |
+| `GPIO 18` | ECHO del HC-SR04 | Recepción del eco; el diseño usa un divisor resistivo de 1 kΩ / 2 kΩ para bajar los 5 V del ECHO a 3.3 V |
 | `GPIO 25` · `GPIO 26` · `GPIO 27` | LED verde · amarillo · rojo (ánodo común) | Estado |
 | `GPIO 19` | Buzzer pasivo | Alarma sonora (PWM) |
 | `VIN` · `3V3` · `GND` | Ver tabla de alimentación | Alimentación y tierra común |

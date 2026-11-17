@@ -281,23 +281,21 @@ Una implementación en un reservorio real requeriría posteriormente calibració
 
 El banco de pruebas del Challenge #2 se organizó según los bloques mínimos del enunciado. Las pruebas se hicieron sobre el equipo integrado (carcasa, tubo de PVC, alimentación por pilas) con el firmware v7, al sol, y con el tablero abierto desde celulares y PC conectados al hotspot que hace de WLAN de la zona.
 
-> Las celdas marcadas con ⟨completar⟩ corresponden a mediciones que el equipo debe registrar con sus propios datos.
-
 ### Criterios de aceptación
 
 Fijados en la hoja de trabajo del equipo antes de las pruebas:
 
 | Prueba | Criterio de aceptación | Resultado |
 |---|---|---|
-| Nivel contra referencia | Error ≤ ±1 cm tras calibración | ⟨completar⟩ |
-| Temperatura y humedad contra referencia | T ≤ ±1 °C; HR ≤ ±5 % | ⟨completar⟩ |
-| Fusión y umbrales | ≥ 12 escenarios × 3 repeticiones; 0 falsos negativos en escenarios críticos; ≤ 1 falso positivo; sin oscilación al bajar de estado | ⟨completar⟩ |
-| Latencia | Alarma física ≤ 2 s y tablero ≤ 5 s tras el evento (desde que se cumple la condición; la escalera de estados agrega la confirmación) | ⟨completar⟩ |
-| Acceso restringido | Un dispositivo no autorizado no accede a los datos | ⟨completar⟩ |
-| Caída de la WLAN | La alerta in situ continúa; reconexión automática < 60 s | ✅ alerta in situ continúa; tiempo de reconexión ⟨completar⟩ |
-| Repetibilidad | Desviación estándar del nivel ≤ 0.5 cm; *jitter* del periodo de muestreo < 5 % con el tablero en uso | ⟨completar⟩ |
-| Consumo | Consumo medio reportado; autonomía objetivo ≥ 24 h | ⟨completar⟩ |
-| Larga duración | 12–24 h encendido sin reinicios | ⟨completar⟩ |
+| Nivel contra referencia | Error ≤ ±1 cm tras calibración | No se midió el error; se capturaron las distancias de lleno y vacío (Sección 5.7.1) |
+| Temperatura y humedad contra referencia | T ≤ ±1 °C; HR ≤ ±5 % | ✅ ΔT ≈ 0.8 °C; ΔHR ≈ 4.7 pp |
+| Fusión y umbrales | ≥ 12 escenarios × 3 repeticiones; 0 falsos negativos en escenarios críticos; ≤ 1 falso positivo; sin oscilación al bajar de estado | ⚠️ 8 escenarios; 1 falso negativo (F6) y 1 falso positivo parcial (F3) |
+| Latencia | Alarma física ≤ 2 s y tablero ≤ 5 s tras el evento (desde que se cumple la condición; la escalera de estados agrega la confirmación) | ✅ Tablero ≈ 4 s; la alarma física no se cronometró por separado |
+| Acceso restringido | Un dispositivo no autorizado no accede a los datos | ✅ Desde fuera de la WLAN no se accede; 5 claves incorrectas bloquean el inicio de sesión 30 s |
+| Caída de la WLAN | La alerta in situ continúa; reconexión automática < 60 s | ✅ La alerta in situ continúa y el tablero se recupera solo; el tiempo de reconexión no se cronometró |
+| Repetibilidad | Desviación estándar del nivel ≤ 0.5 cm; *jitter* del periodo de muestreo < 5 % con el tablero en uso | No realizado |
+| Consumo | Consumo medio reportado; autonomía objetivo ≥ 24 h | No realizado |
+| Larga duración | 12–24 h encendido sin reinicios | No realizado |
 
 > Sobre el criterio de acceso: en la implementación final, un dispositivo fuera de la subred de la WLAN recibe **403**, y uno dentro de la WLAN pero sin sesión es enviado al inicio de sesión (**401** en la API). La lista blanca de IP planeada se reemplazó por la sesión con usuario y contraseña (ver [Sección 12.4](12-Mejoras-Challenge-1.md)).
 
@@ -305,13 +303,14 @@ Fijados en la hoja de trabajo del equipo antes de las pruebas:
 
 | Sensor | Referencia | Procedimiento | Resultado |
 |---|---|---|---|
-| Nivel (HC-SR04 en el tubo) | Regla graduada junto al tubo | Distancias de lleno y vacío capturadas desde el tablero ("Usar como lleno/vacío"); luego 5 o más alturas de agua comparadas con el nivel del tablero | Lleno = ⟨completar⟩ cm, vacío = ⟨completar⟩ cm; error medio = ⟨completar⟩ pp; error máximo = ⟨completar⟩ pp |
-| Panel + INA219 | ⟨completar: piranómetro o estación de referencia⟩ | Con sol, irradiancia de referencia en el tablero y "Calcular K" (regresión por el origen si hay varias medidas) | K = ⟨completar⟩ (W/m²)/mA (etiqueta: 10); R² = ⟨completar⟩ |
+| Nivel (HC-SR04 en el tubo) | Regla graduada junto al tubo | Distancias de lleno y vacío capturadas desde el tablero ("Usar como lleno/vacío"); luego 5 o más alturas de agua comparadas con el nivel del tablero | Vacío ≈ 40 cm (40.3 cm en el tablero); lleno = 19.2 cm simulando el agua con una botella dentro del tubo (depende de lo que se use para simularlo). En la demostración del video, "lleno" se recapturó en 4.9 cm |
+| Panel + INA219 | No usamos ninguna referencia, solo verificamos prendiéndolo en diferentes momentos del día comparando las sensaciones con los valores que arrojaba | Con sol, irradiancia de referencia en el tablero y "Calcular K" | K = 10 (W/m²)/mA (etiqueta: 10) |
 | Cero del panel (INA219) | Panel a oscuras | Promedio de 20 lecturas al arrancar | −0.105 y −0.115 mA (≈ 1 W/m²), restado de todas las lecturas |
-| BME280 (T, HR) | Termohigrómetro digital (±1 °C, ±5 % HR según su ficha) | Sonda junto a las rejillas del BME280, 5 a 10 min de estabilización y una lectura por minuto durante 5 min | ΔT = ⟨completar⟩ °C; ΔHR = ⟨completar⟩ pp. Consistentes si caen dentro de la exactitud de la referencia |
+| BME280 (T, HR) | Termohigrómetro digital (±1 °C, ±5 % HR según su ficha) | Sonda junto a las rejillas del BME280, 5 a 10 min de estabilización y una lectura por minuto durante 5 min | ΔT ≈ 0.8 °C; ΔHR ≈ 4.7 pp (BME280: 20.0 °C y 57.2–57.6 %; termohigrómetro: 20.8 °C y 62 %). Estas diferencias son consistentes porque están dentro del rango de incertidumbre de la ficha del higrómetro |
+| BME280 (presión) | Presión media del campus de la Universidad de La Sabana publicada por la universidad: 751.9 hPa | Comparación de la lectura del tablero con el valor publicado | BME280: 751.7 hPa; diferencia de −0.2 hPa. Es una comparación contra un promedio, no contra una medición simultánea, así que solo confirma el orden de magnitud |
 | Buzzer (actuador) | Barrido de frecuencias, de 500 a 4000 Hz | Tono de 0.6 s por frecuencia, anotando cuáles suenan | Suena hasta **2000 Hz**; no suena desde 2500 Hz. El tono de crítico se ajustó de 2500 a 2000 Hz |
 
-> El termohigrómetro tiene una exactitud del mismo orden que la del BME280 (±1 °C y ±3 % HR según su datasheet [15]), así que la comparación es una **verificación de consistencia** contra un instrumento independiente, no una calibración formal.
+> El termohigrómetro tiene una exactitud similar a la del BME280 (±1 °C, igual en ambos, y ±5 % contra ±3 % HR según su datasheet [15]), así que la comparación es una **verificación de consistencia** contra un instrumento independiente, no una calibración formal. Sin embargo, nos ayuda a verificar que el módulo que usamos no presenta errores de medición.
 
 ### 5.7.2 Verificación del modelo de evaporación
 
@@ -337,7 +336,7 @@ Además se verificaron a mano lecturas reales del tablero (21.2 °C, HR 42.6 %, 
 |---|---|---|
 | Descenso del nivel | Vaciado del tubo | Escalera NORMAL → PRECAUCIÓN → CRÍTICO en el LCD, los LEDs, el buzzer y el tablero, y vuelta a NORMAL al llenarlo |
 | Sol fuerte y aire seco | Equipo al sol (irradiancia medida de 831 W/m², 27.5 °C, 24.8 % HR, VPD 2.76 kPa) | Con el modo demo inicial el índice se saturaba en 100 (ver abajo); tras la corrección queda en ≈ 90 (Priestley-Taylor 60 + VPD 30) |
-| Calor sin luz | Secador sobre el BME280, panel a la sombra (44.7 °C, 16.1 % HR, VPD 6.65 kPa) | El índice se queda en 30: sin radiación, Priestley-Taylor da ET = 0 y solo aporta el componente de VPD, que ya está en su tope. Comportamiento esperado del método |
+| Calor sin luz | Secador sobre el BME280, panel a la sombra (44.7 °C, 16.1 % HR, VPD 6.65 kPa) | El índice se queda en 30: sin radiación, Priestley-Taylor da ET = 0 y solo aporta el componente de VPD, que ya está en su tope. Comportamiento esperado del método. Se hizo una prueba también, llegando a unos 70 °C y llegándole un poquito de luz; el índice evaporativo subió a crítico y el del sistema solo hasta Precaución: tal y como queríamos |
 | Sombra o nube | Tapar el panel | El índice baja a medida que la ventana se llena con la luz nueva (hasta 120 s en modo demo) |
 
 **Corrección encontrada en esta prueba.** En el modo demo inicial, la ventana de 120 s se extrapolaba a un día de 24 h con la misma luz. Con sol real, 831 W/m² equivalían a 72 MJ/m² "por día", 2.5 veces el máximo físico del sitio (28.8 MJ/m²), y la parte de Priestley-Taylor se saturaba siempre. Se cambió el modo demo para tratar la luz de la ventana como el mediodía de un día con esa nubosidad (índice de claridad, Sección 3.2.3). Con la regla nueva, un cielo parcialmente nublado (400 W/m², 21 °C, 50 % HR) pasa de un índice de ≈ 89 a ≈ 52, y el índice vuelve a distinguir días soleados de nublados.
@@ -346,20 +345,20 @@ Además se verificaron a mano lecturas reales del tablero (21.2 °C, HR 42.6 %, 
 
 | Caso | Condición | Estado esperado | Estado obtenido |
 |---|---|---|---|
-| F1 | Tubo lleno, sombra | NORMAL | ⟨completar⟩ |
-| F2 | Tubo lleno, sol fuerte y seco (índice ≥ 85) | **PRECAUCIÓN** (la evaporación sola no lleva a crítico) | ⟨completar⟩ |
-| F3 | Nivel ≈ 40 %, sombra | PRECAUCIÓN | ⟨completar⟩ |
-| F4 | Nivel ≈ 40 %, sol fuerte | CRÍTICO por riesgo combinado (≥ 69.2) | ⟨completar⟩ |
-| F5 | Nivel ≤ 15 % | CRÍTICO | ⟨completar⟩ |
-| F6 | Descenso rápido sostenido (≥ 68 pp/min) | CRÍTICO por tasa | ⟨completar⟩ |
-| F7 | Reposicionamiento brusco (> 8 pp en 1 s) | Sin alarma por tasa (discontinuidad) | ⟨completar⟩ |
-| F8 | Sensor de nivel desconectado | FALLO | ⟨completar⟩ |
-| F9 | Nivel justo en 50 % (borde de precaución) | PRECAUCIÓN (la regla es ≤ 50 %) | ⟨completar⟩ |
-| F10 | Nivel justo en 15 % (borde de crítico) | CRÍTICO (la regla es ≤ 15 %) | ⟨completar⟩ |
-| F11 | Recuperación: llenar el tubo desde CRÍTICO | CRÍTICO → PRECAUCIÓN → NORMAL, sin oscilar (3 ciclos de confirmación para bajar) | ⟨completar⟩ |
-| F12 | Alarma silenciada desde el tablero y el estado empeora | El silencio se cancela y el buzzer vuelve a sonar | ⟨completar⟩ |
+| F1 | Tubo lleno, sombra | NORMAL | NORMAL |
+| F2 | Tubo lleno, sol fuerte y seco (índice ≥ 85) | **PRECAUCIÓN** (la evaporación sola no lleva a crítico) | PRECAUCIÓN |
+| F3 | Nivel ≈ 40 %, sombra | PRECAUCIÓN | PRECAUCIÓN - CRÍTICO por cambios en la posición de la mano al sostener el tubo |
+| F4 | Nivel ≈ 40 %, sol fuerte | CRÍTICO por riesgo combinado (≥ 69.2) | CRÍTICO |
+| F5 | Nivel ≤ 15 % | CRÍTICO | CRÍTICO |
+| F6 | Descenso rápido sostenido (≥ 68 pp/min) | CRÍTICO por tasa | No lo pudimos medir porque manualmente causa discontinuidad |
+| F7 | Reposicionamiento brusco (> 8 pp en 1 s) | Sin alarma por tasa (discontinuidad) | Sin alarma |
+| F8 | Sensor de nivel desconectado | FALLO | FALLO ("SIN ECO") |
+| F9 | Nivel justo en 50 % (borde de precaución) | PRECAUCIÓN (la regla es ≤ 50 %) | No realizado |
+| F10 | Nivel justo en 15 % (borde de crítico) | CRÍTICO (la regla es ≤ 15 %) | No realizado |
+| F11 | Recuperación: llenar el tubo desde CRÍTICO | CRÍTICO → PRECAUCIÓN → NORMAL, sin oscilar (3 ciclos de confirmación para bajar) | No realizado como prueba formal |
+| F12 | Alarma silenciada desde el tablero y el estado empeora | El silencio se cancela y el buzzer vuelve a sonar | No realizado |
 
-Falsos positivos observados: ⟨completar⟩. Falsos negativos observados: ⟨completar⟩.
+Falsos positivos observados: 1, técnicamente medio (F3: subió a CRÍTICO por el movimiento de la mano al sostener el tubo). Falsos negativos observados: 1 (F6: el descenso rápido hecho a mano se detecta como discontinuidad, así que la tasa no llega a CRÍTICO).
 
 > El caso F2 motivó una regla nueva: antes del cambio, el equipo quedaba en CRÍTICO al sol con el tubo lleno (nivel 94 %, riesgo 33). Era un falso positivo, y desde entonces la evaporación sola llega como máximo a PRECAUCIÓN (Sección 3.2.6).
 
@@ -367,7 +366,7 @@ Falsos positivos observados: ⟨completar⟩. Falsos negativos observados: ⟨co
 
 | Prueba | Criterio | Resultado |
 |---|---|---|
-| Latencia de la alerta | Tiempo entre el cambio físico y el aviso en el tablero. Esperado ≤ ~5 s: confirmación del estado (2 ciclos de 1 s) + consulta del tablero (cada 2 s) | ⟨completar con cronómetro o con la antigüedad del evento⟩ |
+| Latencia de la alerta | Tiempo entre el cambio físico y el aviso en el tablero. Esperado ≤ ~5 s: confirmación del estado (2 ciclos de 1 s) + consulta del tablero (cada 2 s) | ~4 s |
 | Actualización del valor actual | El tablero muestra "dato de hace X s" | Valores observados de 0.1 a 0.4 s |
 | Actualización del histórico | Las gráficas se actualizan cada 5 s con un punto cada 2 s | ✅ observado |
 | Avisos | Cada cambio de estado muestra un aviso, suena y vibra | ✅ observado |
@@ -380,21 +379,12 @@ Falsos positivos observados: ⟨completar⟩. Falsos negativos observados: ⟨co
 |---|---|---|
 | Pérdida y reconexión de la WLAN | Apagar y volver a prender los datos o el hotspot con el tablero abierto | **Primera versión:** el tablero se quedaba en "Sin conexión" y, al recargar, la página no cargaba. **Tras la corrección** (cancelación de peticiones a los 4 s, reconexión sin cortar intentos en curso, Wi-Fi sin ahorro de energía y reinicio del servidor al volver la red), la alarma local siguió funcionando durante la caída y el tablero se recuperó solo al volver la red. En la prueba del tablero con red simulada, la recuperación tomó 1.2 s |
 | Recarga y apertura desde otro dispositivo tras la caída | Recargar, abrir desde un segundo celular o PC | ✅ tras la corrección |
-| Acceso con clave incorrecta | 5 intentos | ⟨completar⟩ (esperado: bloqueo de 30 s y evento por intento) |
-| Acceso desde fuera de la WLAN | Celular con datos móviles | ⟨completar⟩ (esperado: no llega al equipo) |
-| Valores fuera de rango | Distancia mayor que "vacío" o menor que "lleno" | El nivel se limita a 0 % o 100 % ⟨confirmar⟩ |
-| Sensor de nivel o BME280 ausente | Desconectar | ⟨completar⟩ (esperado: FALLO con los tres LEDs) |
+| Acceso con clave incorrecta | 5 intentos | Bloqueo de 30 s |
+| Acceso desde fuera de la WLAN | Celular con datos móviles | No se puede acceder al tablero |
+| Valores fuera de rango | Distancia mayor que "vacío" o menor que "lleno" | El nivel se limita a 0 % o 100 % |
+| Sensor de nivel o BME280 ausente | Desconectar | Sin eco del sensor de nivel el equipo pasa a FALLO ("SIN ECO"). Con el BME280 desconectado o con lecturas corruptas, en cambio, las lecturas arrojadas son muy incorrectas (Ej. T° > 150 °C) y el equipo **no** pasa a FALLO. En el video (min 2:40) se ve un caso: presión de 678.8 hPa (la real es ≈ 751 hPa) y un VPD promedio de la ventana de 213.20 kPa, físicamente imposible, que llevó el índice evaporativo a 88.2. Falta validar el rango físico de las lecturas del BME280 y del INA219 (Secciones 6.3 y 7.3) |
 | Calibración inválida | Guardar "vacío" menor que "lleno" + 2 cm | El equipo la rechaza con el motivo en rojo y no cambia nada |
-| Persistencia de la calibración | Apagar y encender | ⟨completar⟩ (esperado: "Cargados de la flash" en el arranque) |
-
-### 5.7.7 Repetibilidad, precisión y desempeño
-
-| Prueba | Resultado |
-|---|---|
-| Repetición de la maniobra de vaciado (3 a 5 veces) | Tasa máxima: ⟨completar media ± desviación⟩; tiempo hasta CRÍTICO: ⟨completar⟩ |
-| Ruido del nivel en reposo (caracterización automática) | ⟨completar con el σ del tubo⟩ |
-| Consumo | Corriente de las pilas en NORMAL: ⟨completar⟩ mA; en CRÍTICO: ⟨completar⟩ mA |
-| Autonomía estimada | ⟨completar⟩ h con 4×AA (≈ ⟨completar⟩ mAh) |
+| Persistencia de la calibración | Apagar y encender | Queda guardado siempre |
 
 ---
 

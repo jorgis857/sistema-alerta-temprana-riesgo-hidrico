@@ -578,7 +578,7 @@ El detalle está en las [Secciones 3.14 a 3.19](03-Desarrollo-Modular.md).
 | **Rango de variables** | Nivel: 0–2 m en un tanque típico (en el prototipo, el recorrido del tubo); temperatura ≈ 0–25 °C; HR 40–95 %; presión ≈ 750 hPa; radiación hasta ≈ 1100–1200 W/m² al mediodía |
 | **Seguridad del sitio** | Solo muy baja tensión dentro de la caja; nada de 110 V cerca del agua |
 
-⟨completar: fotos del sitio, medidas y RSSI medido en el punto de instalación, si se hizo la visita⟩
+La señal del punto de instalación se comprueba en el sitio con el propio tablero, que muestra el RSSI (dBm) en su encabezado (Sección 3.16); el criterio de aceptación es ≥ −70 dBm.
 
 ---
 

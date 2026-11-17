@@ -30,15 +30,14 @@ Esta sección evalúa de forma crítica el protocolo de validación aplicado a W
 
 | Criterio del enunciado | ¿Se cumple? | Evidencia / observación |
 |---|---|---|
-| Calibración de sensores contra referencia, con error y factor de calibración | ⚠️ Parcial ⟨actualizar⟩ | Nivel contra regla y BME280 contra termohigrómetro (Sección 5.7.1); K del panel pendiente de calibrar con sol contra una referencia |
+| Calibración de sensores contra referencia, con error y factor de calibración | ✅ Parcial | Nivel contra regla, Presión con datos reales (no cambia mucho dentro de Bogotá, que es donde se comprobó) y BME280 contra termohigrómetro (Sección 5.7.1); K del panel pendiente de calibrar con sol contra una referencia |
 | Emulación acelerada de condiciones reales | ✅ Sí | Vaciado del tubo, sol y sombra sobre el panel, secador sobre el BME280 (Sección 5.7.3) |
-| Validación de la fusión y los umbrales, con falsos positivos y negativos | ⚠️ ⟨actualizar⟩ | Casos F1–F12 (Sección 5.7.4). La prueba al sol con el tubo lleno detectó un falso positivo y motivó la regla de tope de la evaporación |
-| Latencia de la alerta y actualización del valor actual y del histórico | ⚠️ ⟨actualizar⟩ | Actualización y avisos observados; falta el número de latencia medido |
+| Validación de la fusión y los umbrales, con falsos positivos y negativos | ✅ Sí | Casos F1–F8 (Sección 5.7.4). La prueba al sol con el tubo lleno detectó un falso positivo y motivó la regla de tope de la evaporación / De todas formas sigue arrojando errores tipo 1 y 2 |
+| Latencia de la alerta y actualización del valor actual y del histórico | ✅ Sí | Actualización y avisos observados |
 | Desactivación de la alarma desde el tablero | ✅ Sí | El buzzer se calla 15 min, los LEDs siguen y queda el evento |
 | Pérdida y reconexión de la WLAN | ✅ Sí | La alarma local siguió funcionando; el tablero se recuperó solo después de la corrección (Sección 5.7.6) |
-| Acceso restringido a dispositivos autorizados | ⚠️ ⟨actualizar⟩ | Mecanismo implementado (misma subred + sesión); falta registrar la prueba con clave incorrecta y desde fuera de la WLAN |
-| Valores fuera de rango y fallo de sensores | ⚠️ ⟨actualizar⟩ | Nivel limitado a 0–100 %; FALLO por sensor ausente ⟨registrar⟩ |
-| Repetibilidad, precisión y consumo | ⚠️ ⟨actualizar⟩ | Ver Sección 5.7.7 |
+| Acceso restringido a dispositivos autorizados | ✅ Sí | Se intentó acceder desde otra red y también usando contraseña y usuario incorrectos dentro de la misma red |
+| Valores fuera de rango y fallo de sensores | ✅ Parcial | Nivel limitado a 0–100 %; FALLO por sensor solamente con el ECHO. El piranómetro y BME no avisan |
 | Verificación del modelo de evaporación contra valores de referencia | ✅ Sí | Autotest en el ESP32 real, con diferencias de redondeo frente al cálculo independiente (Sección 5.7.2) |
 
 ---
@@ -128,7 +127,8 @@ Aunque el prototipo cumplió los objetivos funcionales del reto, el protocolo pr
 | **(Ch. #2)** El banco de pruebas no es un embalse | Valida la cadena de cálculo y la respuesta del índice evaporativo, no los mm/día absolutos; G ≈ 0 es un supuesto que no se cumple en agua profunda |
 | **(Ch. #2)** Umbrales de evaporación 60 / 85 sin datos locales | Siguen siendo un supuesto; el método para cerrarlos (percentiles de una estación del IDEAM) queda como trabajo futuro |
 | **(Ch. #2)** La referencia de humedad y temperatura es del mismo orden de exactitud que el BME280 | La comparación es una verificación de consistencia, no una calibración formal |
-| **(Ch. #2)** La caja impresa corresponde a una versión anterior del diseño | ⟨completar: la tapa no ajusta y el USB-C no queda accesible; se reimprime para el tercer corte⟩ |
+| **(Ch. #2)** La caja impresa corresponde a una versión anterior del diseño | La tapa no ajusta, el USB-C no queda accesible, toca poner los componentes más apretados |
+| **(Ch. #2)** El firmware no detecta fallas del BME280 ni del INA219 | Solo la falta de eco del sensor de nivel lleva a FALLO. Si el BME280 se desconecta o entrega lecturas corruptas, los valores imposibles (T > 150 °C, presión de 678.8 hPa, VPD de la ventana de 213.20 kPa) entran al modelo y pueden subir el índice evaporativo sin aviso. Falta validar el rango físico de cada lectura y pasar a FALLO cuando se repiten lecturas inválidas |
 
 ---
 

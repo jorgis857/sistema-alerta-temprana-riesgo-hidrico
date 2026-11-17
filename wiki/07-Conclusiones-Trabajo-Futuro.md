@@ -245,6 +245,10 @@ Servir el tablero por HTTPS, permitir cambiar las redes Wi-Fi sin reprogramar (p
 
 Medir el consumo por estado, estimar la autonomía con pilas y evaluar modos de bajo consumo compatibles con el tablero, por ejemplo despertar periódico con el radio apagado entre consultas.
 
+### 11. (Challenge #2) Detección de fallas del BME280 y del INA219
+
+Validar el rango físico de cada lectura (por ejemplo, temperatura entre −20 y 60 °C, humedad entre 0 y 100 % y presión entre 600 y 1100 hPa), descartar las lecturas imposibles antes de que entren a la ventana de evaporación y pasar a FALLO cuando se repitan. En las pruebas, un BME280 desconectado o con lecturas corruptas entregó valores imposibles (T > 150 °C, presión de 678.8 hPa) que el equipo no detectó como falla (Sección 5.7.6).
+
 ---
 
 ## 7.4 Cierre
@@ -358,7 +362,7 @@ Formato IEEE. [1]–[4] se tomaron textualmente del enunciado oficial. [5]–[37
 
 **Normativa**
 
-[32] Ministerio de Minas y Energía, *Reglamento Técnico de Instalaciones Eléctricas — RETIE*, Colombia. ⟨confirmar número y año de la resolución vigente⟩
+[32] Ministerio de Minas y Energía, "Resolución 40117 de 2024, por la cual se modifica el Reglamento Técnico de Instalaciones Eléctricas — RETIE," Colombia, abr. 2024; modificada por las Resoluciones 40304 de 2025 y 40284 de 2026.
 
 [33] Ministerio de Vivienda, Ciudad y Territorio, "Resolución 0330 de 2017, por la cual se adopta el Reglamento Técnico para el Sector de Agua Potable y Saneamiento Básico — RAS," Colombia, 2017.
 
@@ -368,7 +372,7 @@ Formato IEEE. [1]–[4] se tomaron textualmente del enunciado oficial. [5]–[37
 
 [36] Congreso de la República de Colombia, "Ley Estatutaria 1581 de 2012, por la cual se dictan disposiciones generales para la protección de datos personales," oct. 2012.
 
-[37] Agencia Nacional del Espectro (ANE), régimen de uso libre del espectro radioeléctrico para la banda de 2.4 GHz, Colombia. ⟨confirmar la resolución vigente⟩
+[37] Agencia Nacional del Espectro (ANE), "Resolución 105 de 2020, por medio de la cual se planea y atribuye el espectro radioeléctrico en Colombia," Título 4 y Anexo 1 (bandas de libre utilización, incluida la de 2.4 GHz), Colombia, 2020.
 
 ---
 

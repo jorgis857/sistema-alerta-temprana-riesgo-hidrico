@@ -227,9 +227,15 @@ De esta manera, la IA funcionó principalmente como una herramienta adicional de
 
 ## 8.5 Porcentaje de la Wiki redactado con IA
 
-Aproximadamente el **80 %** del texto de la Wiki se redactó con ayuda de IA y el **20 %** lo redactó directamente el equipo. El 80 % incluye texto que el equipo revisó y editó.
+Aproximadamente el **75 %** del texto de la Wiki se redactó con ayuda de IA y el **25 %** lo redactó directamente el equipo. El 75 % incluye texto que el equipo revisó y editó.
 
-La estimación se hizo por número de palabras. Cerca de la mitad del texto actual corresponde a la actualización del Challenge #2, redactada con Claude Code a partir del código, los resultados y las decisiones del equipo. La otra mitad viene del Challenge #1 y de la Sección 11, que también se estructuraron y redactaron con apoyo de Claude y luego fueron editadas por el equipo.
+La estimación se hizo por número de palabras (≈ 34 000 en total):
+
+| Parte de la Wiki | Palabras (aprox.) | Redacción |
+|---|---|---|
+| Actualización del Challenge #2 redactada con Claude Code a partir del código, los resultados y las decisiones del equipo | ≈ 15 100 (44 %) | IA, revisada por el equipo |
+| Texto escrito directamente por el equipo en el Challenge #2: la mayor parte de esta Sección 8, los resultados de las pruebas (5.7), la autoevaluación (6), los roles, el acta y la autoevaluación individual (9.7) y las correcciones a las demás secciones | ≈ 2 200 (7 %) | Equipo |
+| Texto del Challenge #1 y de la Sección 11, estructurado y redactado con apoyo de Claude y luego editado por el equipo | ≈ 16 800 (49 %) | ≈ 60 % IA / 40 % equipo (estimación del equipo) |
 
 Todo el contenido fue revisado por el equipo. Los datos medidos (calibraciones, pruebas, fotos y resultados) provienen del trabajo del equipo.
 

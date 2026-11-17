@@ -2,9 +2,7 @@
 
 **Curso:** Internet de las Cosas — 2026-2
 **Facultad de Ingeniería — Universidad de La Sabana**
-**Challenge #2 — Equipo 2** (evolución del prototipo del Challenge #1)
-**Fecha de entrega:** ⟨completar⟩ · **Sustentación:** ⟨completar⟩
-*Challenge #1: entrega el 22 de agosto de 2026 · sustentación en la semana 6 (24 o 27 de agosto de 2026)*
+**Challenge #2 — Equipo 2**
 
 Bienvenidos a la Wiki técnica del proyecto **WREWS (Water Risk Early Warning System)**, un prototipo IoT de bajo costo, basado en ESP32, que monitorea de forma continua el nivel de un reservorio de agua, las condiciones ambientales que favorecen su evaporación y la velocidad de descenso del nivel, fusionando estas señales en un único **índice de riesgo hídrico** que se comunica localmente mediante una pantalla LCD 16×2 I²C, LEDs de estado y un buzzer.
 El desarrollo se realizó en dos etapas: primero se validó la arquitectura y la lógica del sistema mediante simulación en Wokwi y posteriormente se construyó y validó un prototipo físico funcional. La implementación física final utiliza una pantalla LCD 16×2 I²C como interfaz de visualización local.
@@ -46,4 +44,4 @@ El funcionamiento completo del prototipo físico WREWS del Challenge #1, incluye
 - Chips personalizados (BME280, INA219, panel solar): [`/hardware/wokwi/chips`](https://github.com/jorgis857/sistema-alerta-temprana-riesgo-hidrico/tree/main/hardware/wokwi/chips)
 - Esquemático / captura del circuito: [`/hardware/schematics/diagrama_circuito_wokwi.png`](https://github.com/jorgis857/sistema-alerta-temprana-riesgo-hidrico/blob/main/hardware/schematics/diagrama_circuito_wokwi.png)
 - Proyecto simulable en Wokwi (firmware del Challenge #1): <https://wokwi.com/projects/472250559337371649>
-- Modelos 3D de la carcasa: ⟨completar: enlace a los STL / script CadQuery de la versión final⟩
+- Modelos 3D de la carcasa: [`/Carcasa_3D_/Carcasa_3D_v16`](https://github.com/jorgis857/sistema-alerta-temprana-riesgo-hidrico/tree/main/Carcasa_3D_/Carcasa_3D_v16) (STL de las seis piezas y script CadQuery `wrews_v16.py`)

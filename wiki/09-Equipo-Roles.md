@@ -159,42 +159,40 @@ Roles definidos en la hoja de trabajo del Challenge #2:
 - Integración de los componentes en la carcasa y del sensor de nivel en el tubo de PVC.
 - Diseño de la alimentación por pilas con interruptor y distribución de las filas de 5 V y 3.3 V.
 - Edición del video de demostración.
-- ⟨completar⟩
 
 ### Antonio Benítez Rueda — Firmware, modelo y tablero de control
 
 - Firmware v6: modelo de evaporación de Priestley-Taylor con FAO-56, ventana móvil, pesos AHP, nuevos umbrales y autotest de referencia.
 - Firmware v7: tareas de FreeRTOS con mutex, Wi-Fi en modo estación con reconexión y dos redes, servidor web embebido, inicio de sesión, tablero con histórico, eventos y silencio de la alarma, y calibración desde el tablero guardada en flash.
 - Diagnóstico y corrección de las fallas encontradas en las pruebas (tono del buzzer, recuperación del tablero, saturación del índice con sol, falsos positivos por evaporación).
-- Hojas de referencias del modelo de evaporación y de pesos y umbrales ⟨confirmar autoría⟩.
-- ⟨completar⟩
+- Integración en el firmware v6 de las hojas de referencias del modelo de evaporación y de pesos y umbrales, con cada constante citada a su fuente ([Ev n] y [Pe n]).
 
 ### Jorge Andrés Rodríguez Huertas — Pruebas, documentación y video
 
-- Diseño y ejecución del banco de pruebas y de la calibración de sensores del Challenge #2.
+- Diseño y ejecución del banco de pruebas del Challenge #2.
 - Actualización de la Wiki.
-- Participación en el video de demostración.
-- Gestión del proyecto y actas de reunión.
-- ⟨completar⟩
+- Guion y grabación del video.
+- Verificación matemática independiente de las cifras del tablero (VPD, nivel, riesgo hídrico y energía diaria equivalente) frente a las fórmulas documentadas.
+- Comparación de presión, temperatura y humedad del BME280 con instrumentos de referencia y registro de los errores obtenidos.
+- Gestión del repositorio y de la Wiki del Challenge #2 y coordinación de la entrega.
 
-### Acta de reunión del Challenge #2
+### Acta de seguimiento del Challenge #2
 
 | Campo | Detalle |
 |---|---|
 | **Proyecto** | WREWS — Water Risk Early Warning System — Challenge #2 |
-| **Fecha de la reunión** | ⟨completar⟩ |
-| **Asistentes** | ⟨completar⟩ |
-| **Modalidad** | ⟨completar⟩ |
-| **Temas tratados** | ⟨completar: p. ej. retroalimentación del Challenge #1, decisiones de pesos y umbrales, arquitectura del tablero, pruebas y video⟩ |
-| **Compromisos y cumplimiento** | ⟨completar⟩ |
+| **Periodo** | Cierre del Challenge #2, del 3 al 6 de octubre de 2026 (firmware v6 y v7, carcasa y Wiki en el repositorio) |
+| **Integrantes** | Mateo Ramírez Cabrera, Antonio Benítez Rueda, Jorge Andrés Rodríguez Huertas |
+| **Temas tratados** | 1. Alcance del Challenge #2: prototipo terminado en carcasa, medición en hilo independiente y tablero embebido en la WLAN, sin MQTT. 2. Retroalimentación recibida en el Challenge #1 y cómo abordarla. 3. Arquitectura del firmware v7: tareas de FreeRTOS con mutex, reconexión Wi-Fi, servidor web, inicio de sesión y calibración guardada en flash. 4. Modelo de evaporación (Priestley-Taylor con FAO-56), pesos AHP (54 / 30 / 16) y nuevos umbrales. 5. Fallas detectadas en las pruebas: saturación del índice con sol y falsos positivos por evaporación, que llevaron a acotar la evaporación a PRECAUCIÓN y al modo DEMO de la irradiancia. 6. Diseño de la carcasa (iteraciones v11 a v17), alimentación por pilas y acople al tubo de PVC. 7. Plan del banco de pruebas: calibración contra referencias, emulación acelerada y prueba de campo en el lago. 8. Documentación en la Wiki, video de demostración y entrega. |
+| **Compromisos y cumplimiento** | Mateo: carcasa, integración y alimentación — ✅ Cumplido (carcasa v16 en `Carcasa_3D_/`, prototipo armado). Antonio: firmware v6/v7, tablero y correcciones — ✅ Cumplido (firmware en `firmware/wrews/`). Jorge: banco de pruebas, Wiki, repositorio y video — ✅ Cumplido (Secciones 5 y 6, y video del Challenge #2). |
 
 ### Autoevaluación de la contribución individual (Challenge #2)
 
 | Integrante | Nivel autoevaluado | Justificación breve |
 |---|---|---|
-| Mateo Ramírez Cabrera | ⟨completar⟩ | ⟨completar⟩ |
-| Antonio Benítez Rueda | ⟨completar⟩ | ⟨completar⟩ |
-| Jorge Andrés Rodríguez Huertas | ⟨completar⟩ | ⟨completar⟩ |
+| Mateo Ramírez Cabrera | **Experto** | Diseñó e imprimió la carcasa a lo largo de siete iteraciones, integró todos los módulos en un producto instalable sobre tubo, resolvió la alimentación por pilas con sus filas de 5 V y 3.3 V y participó en las pruebas de campo. |
+| Antonio Benítez Rueda | **Experto** | Desarrolló dos versiones mayores del firmware con tareas concurrentes, servidor web con autenticación, modelo de evaporación y calibración persistente, y corrigió las fallas que aparecieron en las pruebas. |
+| Jorge Andrés Rodríguez Huertas | **Experto** | Estructuró y publicó la documentación completa del Challenge #2, diseñó el banco de pruebas, verificó de forma independiente las cifras del tablero y coordinó el repositorio, el video y la entrega. |
 
 ---
 

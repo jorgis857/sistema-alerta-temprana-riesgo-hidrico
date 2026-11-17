@@ -6,9 +6,11 @@ Esta sección documenta cómo se atendieron en el Challenge #2 las deficiencias 
 
 ## 12.1 Retroalimentación del docente
 
-La observación principal fue:
+Las observaciones principales fueron:
 
 > "Falta justificar con una fuente externa los pesos (50/30/20) y los umbrales (15/40 % de nivel, 35/70 de riesgo, 60/85 de evaporación, 33/68 de tasa)… ningún valor se ancla a literatura o normativa."
+
+> "Falta justificar el modelo de evaporación potencial. El modelo actual está mal"
 
 También se pidieron más referencias de los últimos 5 años y los datasheets de los componentes.
 
@@ -22,7 +24,7 @@ La revisión del Challenge #1 (registrada en la hoja de trabajo del equipo) señ
 | **IA sin prompts ni validación** | Sección de IA con las herramientas, el uso en cada etapa (incluido el desarrollo del firmware con Claude Code), los mecanismos de validación y el porcentaje de la Wiki | [Sección 8](08-Uso-de-IA.md) |
 | **Restricciones regulatorias y temporales incompletas** | Tabla de restricciones con RETIE, RAS, IEC 60529, Ley 1523, Ley 1581, uso del espectro, plazos y muestreo | [Sección 2.2](02-Solucion-Propuesta.md) |
 | **Faltaban pruebas de borde y de recuperación** | Matriz de 12 escenarios con valores exactos sobre los umbrales y la recuperación crítico → normal | [Sección 5.7.4](05-Configuracion-Experimental-Resultados.md) |
-| **Una sola acta** | Actas semanales | ⟨completar: enlace a las actas⟩ |
+| **Una sola acta** | Acta de seguimiento del Challenge #2 con temas, compromisos y cumplimiento | [Sección 9.7](09-Equipo-Roles.md) |
 | **Sustentación oral (2/4): el video hablaba del prototipo en futuro** | Video del Ch. #2 centrado en el prototipo real funcionando; pitch para *stakeholders* ensayado y banco de preguntas probables | [Video del Challenge #2](https://youtu.be/H0U9AYJEdTg) |
 
 | Elemento | Challenge #1 | Challenge #2 | Dónde |
@@ -55,9 +57,9 @@ La revisión del Challenge #1 (registrada en la hoja de trabajo del equipo) señ
 
 Para no presentar como resuelto lo que no lo está:
 
-- **Consumo y autonomía:** el Challenge #1 lo dejó pendiente y en el Challenge #2 sigue sin cerrarse; además el Wi-Fi sin ahorro de energía aumenta el consumo ⟨actualizar si se midió⟩.
+- **Consumo y autonomía:** el Challenge #1 lo dejó pendiente y en el Challenge #2 sigue sin cerrarse; además el Wi-Fi sin ahorro de energía aumenta el consumo.
 - **Umbrales de evaporación con datos locales:** el método está citado, pero no se aplicó con datos del IDEAM.
-- **Calibración de la irradiancia con un instrumento de referencia** ⟨actualizar si se hizo⟩.
+- **Calibración de la irradiancia con un instrumento de referencia.**
 - **Validación en un embalse real** y pruebas prolongadas.
 
 ## 12.4 Plan de trabajo vs. lo implementado
@@ -67,8 +69,8 @@ La hoja de trabajo del equipo fijó un plan al inicio del Challenge #2. Esta tab
 | Elemento | Plan (hoja de trabajo) | Implementado | Motivo |
 |---|---|---|---|
 | Medición concurrente | *Timer* de hardware (ISR) que libera un semáforo + tarea en el núcleo 0 | Tarea de FreeRTOS en el núcleo 0 con periodo fijo (`vTaskDelayUntil`), sin ISR | Cumple la restricción ("hilo distinto al principal") con menos código; no hace falta ISR porque no hay sensores por pulsos |
-| Caudal | Caudalímetro YF-S201 contado en una ISR, en la fusión | No implementado ⟨confirmar⟩ | ⟨completar⟩ |
-| Sensor de nivel | JSN-SR04T impermeable | HC-SR04 dentro del tubo de PVC ⟨confirmar⟩ | El tubo protege el sensor y estabiliza la superficie |
+| Caudal | Caudalímetro YF-S201 contado en una ISR, en la fusión | No implementado | La fusión usa nivel, evaporación y tasa de descenso; la tasa de descenso ya refleja la salida de agua sin otro sensor |
+| Sensor de nivel | JSN-SR04T impermeable | HC-SR04 dentro del tubo de PVC | El tubo protege el sensor y estabiliza la superficie |
 | Velocidad del sonido | Compensada con la temperatura del BME280 | Constante (343 m/s) | Trabajo futuro |
 | Servidor web | ESPAsyncWebServer, páginas en LittleFS, actualización por SSE o WebSocket | `WebServer` síncrono en `loop()`, páginas embebidas en el firmware, consulta periódica (2 s / 5 s) con cancelación por tiempo | Sin dependencias externas; las alarmas van en su propia tarea, así que el servidor nunca las bloquea |
 | Gráficas | Librería de gráficas local | Gráficas dibujadas con `<canvas>` | Sin librerías ni Internet |
@@ -79,9 +81,9 @@ La hoja de trabajo del equipo fijó un plan al inicio del Challenge #2. Esta tab
 | Recuperación de estado | Histéresis para bajar | Confirmación asimétrica (3 ciclos para bajar) y escalera de un peldaño | Evita la oscilación con el mismo efecto |
 | LCD | Pantallas rotativas con botón | Rotación automática de 7 páginas, sin botón | Una entrada física menos en un equipo cerrado |
 | BME280 | Brazo lateral con protector de radiación | Techo con rejillas sobre la carcasa | Integrado en la impresión 3D |
-| Carcasa | Caja IP65 comercial o impresa en PETG/ASA, PCB perforada, prensaestopas | Carcasa impresa en PETG, electrónica en mini protoboard | ⟨completar⟩; el grado IP no se ensayó |
-| Alimentación | Red 5 V con respaldo 18650 (TP4056 + MT3608) y panel solar | Portapilas 4×AA con interruptor ⟨confirmar⟩ | ⟨completar⟩ |
-| Medición de consumo | INA219 adicional en la entrada | ⟨completar⟩ | ⟨completar⟩ |
+| Carcasa | Caja IP65 comercial o impresa en PETG/ASA, PCB perforada, prensaestopas | Carcasa impresa en PETG, electrónica en mini protoboard | La impresión permitió integrar el acople al tubo de PVC y el techo del BME280 en la misma carcasa; el grado IP no se ensayó |
+| Alimentación | Red 5 V con respaldo 18650 (TP4056 + MT3608) y panel solar | Portapilas 4×AA alcalinas Duracell con interruptor y 2 diodos 1N4007 en serie | Permite alimentar el prototipo sin cable; los diodos bajan los ≈ 6 V de las pilas nuevas |
+| Medición de consumo | INA219 adicional en la entrada | No implementado: el único INA219 mide la corriente del panel (irradiancia) | El consumo y la autonomía quedan como trabajo futuro (Sección 12.3) |
 | Seguimiento solar | No en el prototipo (panel fijo horizontal como sensor) | No implementado, como se decidió | El panel es el sensor de radiación global horizontal |
 
 ---
